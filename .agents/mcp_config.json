@@ -1,0 +1,13 @@
+{
+	"mcpServers": {
+		"github": {
+			"serverUrl": "https://api.githubcopilot.com/mcp/"
+		},
+		"atlassian": {
+			"serverUrl": "https://mcp.atlassian.com/v2/mcp"
+		},
+		"notion": {
+			"serverUrl": "https://mcp.notion.com/mcp"
+		}
+	}
+}
