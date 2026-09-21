@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+
+if [ "$3" != "1" ]; then
+    exit 0
+fi
+
+changed_files=$(git diff --name-only $1 $2)
+
+check_run() {
+    pattern=$1
+    cmd=$2
+    msg=$3
+
+    if echo "$changed_files" | grep -qE "$pattern"; then
+        echo "--- [Husky] $msg ---"
+        eval "$cmd"
+    fi
+}
+
+check_run "package\.json|package-lock\.json" "npm install" "Nova branch possui dependências diferentes: Instalando..."
