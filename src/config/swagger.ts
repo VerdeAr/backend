@@ -45,5 +45,15 @@ export const swaggerDoc = {
 				responses: { 200: { description: "Perfil retornado" } },
 			},
 		},
+		"/bairros": {
+			get: {
+				summary: "Listar bairros ordenados para cadastro/endereçamento",
+				responses: {
+					200: {
+						description: "Lista de bairros retornada com sucesso",
+					},
+				},
+			},
+		},
 	},
 };
