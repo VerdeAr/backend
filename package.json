@@ -9,9 +9,8 @@
     "start": "node dist/server.js",
     "check": "biome check src/",
     "lint": "biome check src/",
-    "format": "biome format --write src/",
-    "typeorm": "typeorm-ts-node-commonjs",
-    "migration:generate": "npm run typeorm -- migration:generate src/migrations/InitialMigration",
+    "typeorm": "tsx ./node_modules/typeorm/cli.js -d src/config/database.ts",
+    "migration:generate": "npm run typeorm -- migration:generate",
     "migration:run": "npm run typeorm -- migration:run",
     "migration:revert": "npm run typeorm -- migration:revert"
   },
