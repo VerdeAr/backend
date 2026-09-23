@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
+import { AppError } from "../errors/AppError";
 
 export const errorHandler = (
 	err: Error,
@@ -7,9 +8,18 @@ export const errorHandler = (
 	res: Response,
 	_next: NextFunction,
 ) => {
+	if (err instanceof AppError) {
+		return res.status(err.statusCode).json({
+			success: false,
+			message: err.message,
+			...(err.errors ? { errors: err.errors } : {}),
+		});
+	}
+
 	if (err instanceof ZodError) {
 		return res.status(400).json({
-			message: "Falha de validação",
+			success: false,
+			message: "Falha de validação dos dados de entrada.",
 			errors: err.issues.map((i) => ({
 				field: i.path.join("."),
 				message: i.message,
@@ -17,12 +27,9 @@ export const errorHandler = (
 		});
 	}
 
-	if (
-		err.message === "Credenciais inválidas." ||
-		err.message === "E-mail já está em uso."
-	) {
-		return res.status(400).json({ message: err.message });
-	}
-
-	return res.status(500).json({ message: "Erro interno do servidor." });
+	console.error("❌ Erro interno não tratado:", err);
+	return res.status(500).json({
+		success: false,
+		message: "Erro interno do servidor.",
+	});
 };
