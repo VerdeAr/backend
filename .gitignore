@@ -1,2 +1,4 @@
 .env
 node_modules
+mcp_config.json
+.mcp.json
