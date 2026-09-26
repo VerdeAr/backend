@@ -306,5 +306,123 @@ export const swaggerDoc = {
 				},
 			},
 		},
+		"/vendas/checkout": {
+			post: {
+				summary: "Realizar checkout transacional com garantia ACID",
+				security: [{ bearerAuth: [] }],
+				requestBody: {
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									delivery_type: {
+										type: "string",
+										enum: ["ENTREGA", "RETIRADA"],
+									},
+									payment_method: { type: "string" },
+								},
+							},
+						},
+					},
+				},
+				responses: {
+					201: { description: "Pedido criado com sucesso" },
+					400: { description: "Estoque insuficiente ou carrinho vazio" },
+				},
+			},
+		},
+		"/vendas/minhas-compras": {
+			get: {
+				summary: "Listar histórico de compras do cliente autenticado",
+				security: [{ bearerAuth: [] }],
+				responses: {
+					200: { description: "Lista de compras retornada com sucesso" },
+				},
+			},
+		},
+		"/vendas/{id}": {
+			get: {
+				summary: "Obter detalhes de uma compra específica do cliente",
+				security: [{ bearerAuth: [] }],
+				parameters: [
+					{
+						name: "id",
+						in: "path",
+						required: true,
+						schema: { type: "string", format: "uuid" },
+					},
+				],
+				responses: {
+					200: { description: "Detalhes da compra retornados" },
+					404: { description: "Compra não encontrada" },
+				},
+			},
+		},
+		"/vendedor/pedidos": {
+			get: {
+				summary: "Listar pedidos recebidos pelo produtor rural",
+				security: [{ bearerAuth: [] }],
+				parameters: [
+					{
+						name: "status",
+						in: "query",
+						required: false,
+						schema: {
+							type: "string",
+							enum: ["ABERTA", "FINALIZADA", "CANCELADA"],
+						},
+					},
+				],
+				responses: {
+					200: { description: "Lista de pedidos retornada" },
+				},
+			},
+		},
+		"/vendedor/pedidos/pendentes/count": {
+			get: {
+				summary: "Contagem de pedidos pendentes para notificações do produtor",
+				security: [{ bearerAuth: [] }],
+				responses: {
+					200: { description: "Contagem retornada" },
+				},
+			},
+		},
+		"/vendas/{id}/status": {
+			patch: {
+				summary:
+					"Atualizar status do pedido (com estorno de estoque em cancelamento)",
+				security: [{ bearerAuth: [] }],
+				parameters: [
+					{
+						name: "id",
+						in: "path",
+						required: true,
+						schema: { type: "string", format: "uuid" },
+					},
+				],
+				requestBody: {
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									status: {
+										type: "string",
+										enum: ["FINALIZADA", "CANCELADA"],
+									},
+								},
+								required: ["status"],
+							},
+						},
+					},
+				},
+				responses: {
+					200: { description: "Status do pedido atualizado" },
+					400: { description: "Transição de status inválida" },
+					403: { description: "Sem permissão para alterar este pedido" },
+				},
+			},
+		},
 	},
 };
