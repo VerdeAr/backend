@@ -35,8 +35,12 @@ RUN npm ci --omit=dev
 # Copia os artefatos compilados do stage anterior
 COPY --from=builder /app/dist ./dist
 
+# Copia o entrypoint que roda migrations antes de iniciar o servidor
+COPY entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
 # Expõe a porta definida na variável de ambiente (padrão: 3000)
 EXPOSE 3000
 
-# Inicia o servidor
-CMD ["node", "dist/server.js"]
+# Roda migrations e inicia o servidor
+ENTRYPOINT ["sh", "./entrypoint.sh"]
