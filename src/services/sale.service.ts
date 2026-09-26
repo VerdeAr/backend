@@ -355,6 +355,95 @@ export class SaleService {
 		return { count };
 	}
 
+	/**
+	 * Atualiza o status de uma venda com integridade transacional ACID.
+	 * Caso o novo status seja CANCELADA, os produtos vendidos têm seus estoques
+	 * atomicamente estornados sob transação TypeORM com lock pessimista.
+	 */
+	async updateSaleStatus(
+		sellerUserId: string,
+		saleId: string,
+		newStatus: SaleStatus,
+	): Promise<FormattedSellerOrder> {
+		const seller = await sellerRepository.findByUserId(sellerUserId);
+		if (!seller) {
+			throw new AppError("Perfil de vendedor não encontrado.", 404);
+		}
+
+		await AppDataSource.transaction(async (manager) => {
+			const sale = await manager.findOne(Sale, {
+				where: { id: saleId },
+				relations: {
+					items: {
+						product: true,
+					},
+					customer: true,
+				},
+			});
+
+			if (!sale) {
+				throw new AppError("Pedido não encontrado.", 404);
+			}
+
+			// Verifica se o vendedor possui produtos neste pedido
+			const hasSellerProduct = (sale.items || []).some(
+				(item) => item.product?.seller_id === seller.id,
+			);
+
+			if (!hasSellerProduct) {
+				throw new AppError(
+					"Você não tem permissão para alterar o status deste pedido.",
+					403,
+				);
+			}
+
+			// Validações de máquina de estados
+			if (sale.status === newStatus) {
+				return;
+			}
+
+			if (sale.status === SaleStatus.CANCELADA) {
+				throw new AppError("Este pedido já se encontra cancelado.", 400);
+			}
+
+			if (sale.status === SaleStatus.FINALIZADA) {
+				throw new AppError(
+					"Este pedido já foi finalizado e não pode ter seu status alterado.",
+					400,
+				);
+			}
+
+			// Se o novo status for CANCELADA, estorna o estoque atomicamente com lock pessimista
+			if (newStatus === SaleStatus.CANCELADA) {
+				for (const item of sale.items || []) {
+					const product = await manager
+						.createQueryBuilder(Product, "product")
+						.setLock("pessimistic_write")
+						.where("product.id = :id", { id: item.product_id })
+						.getOne();
+
+					if (product) {
+						product.stock = Number(
+							(Number(product.stock) + Number(item.quantity)).toFixed(3),
+						);
+						await manager.save(product);
+					}
+				}
+			}
+
+			sale.status = newStatus;
+			await manager.save(sale);
+		});
+
+		// Retorna o pedido atualizado com a perspectiva do vendedor
+		const updatedOrders = await this.getSellerOrders(sellerUserId);
+		const targetOrder = updatedOrders.find((order) => order.id === saleId);
+		if (!targetOrder) {
+			throw new AppError("Pedido não encontrado após atualização.", 404);
+		}
+		return targetOrder;
+	}
+
 	private formatPurchase(sale: Sale): FormattedPurchase {
 		return {
 			id: sale.id,

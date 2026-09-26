@@ -27,3 +27,11 @@ export const saleIdParamSchema = z.object({
 });
 
 export type SaleIdParam = z.infer<typeof saleIdParamSchema>;
+
+export const updateSaleStatusSchema = z.object({
+	status: z.nativeEnum(SaleStatus, {
+		message: "Status deve ser ABERTA, FINALIZADA ou CANCELADA",
+	}),
+});
+
+export type UpdateSaleStatusInput = z.infer<typeof updateSaleStatusSchema>;
