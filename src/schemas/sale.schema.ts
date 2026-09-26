@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DeliveryType } from "@/entities/enums";
+import { DeliveryType, SaleStatus } from "@/entities/enums";
 
 export const checkoutSchema = z.object({
 	delivery_type: z
@@ -15,3 +15,15 @@ export const checkoutSchema = z.object({
 });
 
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
+
+export const sellerOrdersQuerySchema = z.object({
+	status: z.nativeEnum(SaleStatus).optional(),
+});
+
+export type SellerOrdersQuery = z.infer<typeof sellerOrdersQuerySchema>;
+
+export const saleIdParamSchema = z.object({
+	id: z.string().uuid("ID de venda inválido"),
+});
+
+export type SaleIdParam = z.infer<typeof saleIdParamSchema>;
