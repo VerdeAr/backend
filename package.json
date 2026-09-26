@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias",
     "start": "node dist/server.js",
     "check": "biome check src/",
     "lint": "biome check src/",
@@ -31,6 +31,7 @@
     "@types/swagger-ui-express": "^4.1.8",
     "husky": "^9.1.7",
     "tsx": "^4.23.15",
+    "tsc-alias": "^1.8.16",
     "typescript": "^7.0.2"
   },
   "dependencies": {
