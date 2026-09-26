@@ -5,12 +5,14 @@ import {
 	JoinColumn,
 	ManyToOne,
 	PrimaryGeneratedColumn,
+	Unique,
 	UpdateDateColumn,
 } from "typeorm";
 import type { Cart } from "./Cart";
 import { Product } from "./Product";
 
 @Entity("cart_items")
+@Unique(["cart_id", "product_id"])
 export class CartItem {
 	@PrimaryGeneratedColumn("uuid")
 	id!: string;

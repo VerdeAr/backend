@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authRoutes } from "./auth.routes";
+import { cartRoutes } from "./cart.routes";
 import { categoryRoutes } from "./category.routes";
 import { measurementUnitRoutes } from "./measurement-unit.routes";
 import { neighborhoodRoutes } from "./neighborhood.routes";
@@ -16,5 +17,6 @@ router.use("/produtos", productRoutes);
 router.use("/categorias", categoryRoutes);
 router.use("/unidades-medida", measurementUnitRoutes);
 router.use("/vendedor/produtos", sellerProductRoutes);
+router.use("/carrinho", cartRoutes);
 
 export { router };
