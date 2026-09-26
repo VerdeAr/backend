@@ -55,5 +55,48 @@ export const swaggerDoc = {
 				},
 			},
 		},
+		"/produtos": {
+			get: {
+				summary: "Listar produtos públicos com filtros e paginação",
+				responses: {
+					200: {
+						description: "Produtos retornados com sucesso",
+					},
+				},
+			},
+		},
+		"/produtos/{id}": {
+			get: {
+				summary: "Obter detalhes de um produto público por ID",
+				responses: {
+					200: {
+						description: "Detalhes do produto retornados com sucesso",
+					},
+					404: {
+						description: "Produto não encontrado ou indisponível",
+					},
+				},
+			},
+		},
+		"/categorias": {
+			get: {
+				summary: "Listar categorias agrícolas cadastradas",
+				responses: {
+					200: {
+						description: "Lista de categorias retornada com sucesso",
+					},
+				},
+			},
+		},
+		"/unidades-medida": {
+			get: {
+				summary: "Listar unidades de medida cadastradas",
+				responses: {
+					200: {
+						description: "Lista de unidades de medida retornada com sucesso",
+					},
+				},
+			},
+		},
 	},
 };
