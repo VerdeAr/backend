@@ -167,5 +167,144 @@ export const swaggerDoc = {
 				},
 			},
 		},
+		"/carrinho": {
+			get: {
+				summary: "Obter carrinho persistente do usuário com itens e cálculos",
+				security: [{ bearerAuth: [] }],
+				responses: {
+					200: { description: "Carrinho retornado com sucesso" },
+					401: { description: "Não autenticado" },
+				},
+			},
+			delete: {
+				summary: "Esvaziar todos os itens do carrinho",
+				security: [{ bearerAuth: [] }],
+				responses: {
+					200: { description: "Carrinho esvaziado com sucesso" },
+					401: { description: "Não autenticado" },
+				},
+			},
+		},
+		"/carrinho/itens": {
+			post: {
+				summary: "Adicionar item ou incrementar quantidade no carrinho",
+				security: [{ bearerAuth: [] }],
+				requestBody: {
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									product_id: { type: "string", format: "uuid" },
+									quantity: { type: "number", example: 1 },
+								},
+								required: ["product_id"],
+							},
+						},
+					},
+				},
+				responses: {
+					200: { description: "Item adicionado ao carrinho" },
+					400: { description: "Quantidade excede estoque ou produto esgotado" },
+					404: { description: "Produto não encontrado" },
+				},
+			},
+		},
+		"/carrinho/itens/{id}": {
+			patch: {
+				summary: "Atualizar quantidade de item existente no carrinho",
+				security: [{ bearerAuth: [] }],
+				parameters: [
+					{
+						name: "id",
+						in: "path",
+						required: true,
+						schema: { type: "string", format: "uuid" },
+					},
+				],
+				requestBody: {
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									quantity: { type: "number", example: 2 },
+								},
+								required: ["quantity"],
+							},
+						},
+					},
+				},
+				responses: {
+					200: { description: "Quantidade atualizada com sucesso" },
+					400: { description: "Quantidade inválida ou excede estoque" },
+					404: { description: "Item não encontrado no carrinho" },
+				},
+			},
+			delete: {
+				summary: "Remover item específico do carrinho",
+				security: [{ bearerAuth: [] }],
+				parameters: [
+					{
+						name: "id",
+						in: "path",
+						required: true,
+						schema: { type: "string", format: "uuid" },
+					},
+				],
+				responses: {
+					200: { description: "Item removido com sucesso" },
+					404: { description: "Item não encontrado no carrinho" },
+				},
+			},
+		},
+		"/carrinho/entrega": {
+			post: {
+				summary: "Definir modalidade de entrega (ENTREGA ou RETIRADA)",
+				security: [{ bearerAuth: [] }],
+				requestBody: {
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									delivery_type: {
+										type: "string",
+										enum: ["ENTREGA", "RETIRADA"],
+									},
+								},
+								required: ["delivery_type"],
+							},
+						},
+					},
+				},
+				responses: {
+					200: { description: "Modalidade de entrega atualizada" },
+					400: { description: "Modalidade inválida" },
+				},
+			},
+		},
+		"/carrinho/pagamento": {
+			post: {
+				summary: "Salvar preferência de forma de pagamento no carrinho",
+				security: [{ bearerAuth: [] }],
+				requestBody: {
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									payment_method: { type: "string" },
+								},
+								required: ["payment_method"],
+							},
+						},
+					},
+				},
+				responses: {
+					200: { description: "Forma de pagamento salva" },
+				},
+			},
+		},
 	},
 };
