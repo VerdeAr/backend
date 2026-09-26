@@ -8,13 +8,15 @@ import { router } from "@/routes/index";
 
 const app = express();
 
+// Origens permitidas: variável de ambiente CORS_ORIGIN (separadas por vírgula)
+// ou fallback para localhost em desenvolvimento
+const allowedOrigins: string[] = process.env.CORS_ORIGIN
+	? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
+	: ["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"];
+
 app.use(
 	cors({
-		origin: [
-			"http://localhost:5173",
-			"http://localhost:3000",
-			"http://127.0.0.1:5173",
-		],
+		origin: allowedOrigins,
 		credentials: true,
 		methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 		allowedHeaders: ["Content-Type", "Authorization", "Accept"],
