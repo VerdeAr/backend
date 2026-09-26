@@ -98,5 +98,74 @@ export const swaggerDoc = {
 				},
 			},
 		},
+		"/vendedor/produtos": {
+			get: {
+				summary: "Listar todos os produtos do produtor rural logado",
+				security: [{ bearerAuth: [] }],
+				responses: {
+					200: {
+						description: "Catálogo do produtor retornado com sucesso",
+					},
+					403: {
+						description: "Acesso negado: permissão restrita a vendedores",
+					},
+				},
+			},
+			post: {
+				summary: "Cadastrar novo produto agrícola para venda",
+				security: [{ bearerAuth: [] }],
+				responses: {
+					201: {
+						description: "Produto cadastrado com sucesso",
+					},
+					403: {
+						description: "Acesso negado: permissão restrita a vendedores",
+					},
+				},
+			},
+		},
+		"/vendedor/produtos/{id}": {
+			put: {
+				summary: "Atualizar dados e estoque de um produto do produtor",
+				security: [{ bearerAuth: [] }],
+				responses: {
+					200: {
+						description: "Produto atualizado com sucesso",
+					},
+					403: {
+						description: "Acesso negado ou produto de outro vendedor",
+					},
+					404: {
+						description: "Produto não encontrado",
+					},
+				},
+			},
+			delete: {
+				summary: "Excluir ou desativar produto do produtor",
+				security: [{ bearerAuth: [] }],
+				responses: {
+					200: {
+						description: "Produto removido ou desativado com sucesso",
+					},
+					403: {
+						description: "Acesso negado ou produto de outro vendedor",
+					},
+				},
+			},
+		},
+		"/vendedor/produtos/{id}/toggle-ativo": {
+			patch: {
+				summary: "Ativar ou desativar anúncio do produto",
+				security: [{ bearerAuth: [] }],
+				responses: {
+					200: {
+						description: "Status do anúncio alternado com sucesso",
+					},
+					403: {
+						description: "Acesso negado ou produto de outro vendedor",
+					},
+				},
+			},
+		},
 	},
 };

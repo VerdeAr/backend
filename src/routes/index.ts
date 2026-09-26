@@ -5,6 +5,7 @@ import { measurementUnitRoutes } from "./measurement-unit.routes";
 import { neighborhoodRoutes } from "./neighborhood.routes";
 import { personRoutes } from "./person.routes";
 import { productRoutes } from "./product.routes";
+import { sellerProductRoutes } from "./seller-product.routes";
 
 const router = Router();
 
@@ -14,5 +15,6 @@ router.use("/bairros", neighborhoodRoutes);
 router.use("/produtos", productRoutes);
 router.use("/categorias", categoryRoutes);
 router.use("/unidades-medida", measurementUnitRoutes);
+router.use("/vendedor/produtos", sellerProductRoutes);
 
 export { router };
