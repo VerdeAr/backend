@@ -3,6 +3,7 @@ import {
 	categoryRepository,
 	measurementUnitRepository,
 	productRepository,
+	reviewRepository,
 	sellerRepository,
 } from "@/repositories";
 import type {
@@ -47,7 +48,9 @@ export class ProductService {
 			throw new AppError("Produto indisponível no momento.", 404);
 		}
 
-		return product;
+		const ratingStats = await reviewRepository.getProductRatingStats(id);
+
+		return { ...product, ...ratingStats };
 	}
 
 	async listCategories() {
