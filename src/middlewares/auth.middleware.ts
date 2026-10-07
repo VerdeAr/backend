@@ -13,16 +13,14 @@ export const ensureAuthenticated = (
 	res: Response,
 	next: NextFunction,
 ) => {
-	const authHeader = req.headers.authorization;
+	const token = req.cookies?.token ?? req.headers.authorization?.split(" ")[1];
 
-	if (!authHeader) {
+	if (!token) {
 		return res.status(401).json({
 			success: false,
 			message: "Token não fornecido.",
 		});
 	}
-
-	const [, token] = authHeader.split(" ");
 
 	try {
 		const secret = process.env.JWT_SECRET!;

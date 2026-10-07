@@ -1,3 +1,4 @@
+import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
 import swaggerUi from "swagger-ui-express";
@@ -24,6 +25,7 @@ app.use(
 );
 
 app.use(express.json());
+app.use(cookieParser());
 app.use(loggingMiddleware);
 
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDoc));

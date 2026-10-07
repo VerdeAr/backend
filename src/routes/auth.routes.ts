@@ -9,6 +9,7 @@ const controller = new AuthController();
 
 authRoutes.post("/register", validate(registerSchema), controller.register);
 authRoutes.post("/login", validate(loginSchema), controller.login);
+authRoutes.post("/logout", controller.logout);
 authRoutes.get("/me", ensureAuthenticated, controller.me);
 
 export { authRoutes };
