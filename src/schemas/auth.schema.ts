@@ -1,5 +1,6 @@
 import { cnpj as cnpjValidator, cpf as cpfValidator } from "cpf-cnpj-validator";
 import { z } from "zod";
+import { UserRole } from "@/entities/enums";
 
 export const registerSchema = z.object({
 	name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").max(100),
@@ -13,7 +14,7 @@ export const registerSchema = z.object({
 			"CPF informado é inválido",
 		)
 		.transform((val) => val.replace(/\D/g, "")),
-	role: z.enum(["CLIENTE", "VENDEDOR"]).default("CLIENTE"),
+	role: z.nativeEnum(UserRole).default(UserRole.CLIENTE),
 	phone: z.string().max(20).optional().nullable(),
 	address: z.string().max(255).optional().nullable(),
 	neighborhood_id: z.uuid("ID de bairro inválido").optional().nullable(),

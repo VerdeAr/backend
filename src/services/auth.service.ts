@@ -2,7 +2,6 @@ import process from "node:process";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { AppDataSource } from "@/config/database";
-import type { UserRole } from "@/entities/enums";
 import { Seller } from "@/entities/Seller";
 import { AppError } from "@/errors/AppError";
 import { userRepository } from "@/repositories/user.repository";
@@ -36,7 +35,7 @@ export class AuthService {
 			email: data.email,
 			password: hashedPassword,
 			cpf: data.cpf,
-			role: data.role as UserRole,
+			role: data.role,
 			phone: data.phone || null,
 			address: data.address || null,
 			neighborhood_id: data.neighborhood_id || null,
