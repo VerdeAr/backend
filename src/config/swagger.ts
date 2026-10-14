@@ -45,6 +45,106 @@ export const swaggerDoc = {
 				responses: { 200: { description: "Perfil retornado" } },
 			},
 		},
+		"/pessoa/cadastro": {
+			put: {
+				summary: "Atualizar dados de perfil do usuário ou vendedor",
+				security: [{ bearerAuth: [] }],
+				requestBody: {
+					required: true,
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									name: { type: "string", minLength: 2, maxLength: 100 },
+									phone: { type: "string", nullable: true },
+									address: { type: "string", nullable: true },
+									neighborhood_id: {
+										type: "string",
+										format: "uuid",
+										nullable: true,
+									},
+									description: {
+										type: "string",
+										maxLength: 500,
+										nullable: true,
+									},
+									farm_name: {
+										type: "string",
+										maxLength: 150,
+										nullable: true,
+									},
+								},
+							},
+						},
+					},
+				},
+				responses: {
+					200: { description: "Perfil atualizado com sucesso" },
+					400: { description: "Dados inválidos" },
+					401: { description: "Não autenticado" },
+				},
+			},
+		},
+		"/pessoa/senha": {
+			put: {
+				summary: "Atualizar senha do usuário autenticado",
+				security: [{ bearerAuth: [] }],
+				requestBody: {
+					required: true,
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									current_password: { type: "string" },
+									new_password: { type: "string", minLength: 6 },
+									confirm_password: { type: "string", minLength: 6 },
+								},
+								required: [
+									"current_password",
+									"new_password",
+									"confirm_password",
+								],
+							},
+						},
+					},
+				},
+				responses: {
+					200: { description: "Senha alterada com sucesso" },
+					400: {
+						description: "Senha atual incorreta ou confirmação incompatível",
+					},
+					401: { description: "Não autenticado" },
+				},
+			},
+		},
+		"/pessoa/frete": {
+			put: {
+				summary: "Configurar taxa de frete fixo do vendedor",
+				security: [{ bearerAuth: [] }],
+				requestBody: {
+					required: true,
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									fixed_shipping_rate: { type: "number", minimum: 0 },
+								},
+								required: ["fixed_shipping_rate"],
+							},
+						},
+					},
+				},
+				responses: {
+					200: { description: "Taxa de frete atualizada com sucesso" },
+					400: { description: "Valor de frete inválido" },
+					401: { description: "Não autenticado" },
+					403: { description: "Acesso restrito a vendedores" },
+				},
+			},
+		},
 		"/bairros": {
 			get: {
 				summary: "Listar bairros ordenados para cadastro/endereçamento",
@@ -385,6 +485,42 @@ export const swaggerDoc = {
 				security: [{ bearerAuth: [] }],
 				responses: {
 					200: { description: "Contagem retornada" },
+				},
+			},
+		},
+		"/vendedor/pedidos/{id}/status": {
+			patch: {
+				summary:
+					"Atualizar status do pedido pelo vendedor (com estorno de estoque em cancelamento)",
+				security: [{ bearerAuth: [] }],
+				parameters: [
+					{
+						name: "id",
+						in: "path",
+						required: true,
+						schema: { type: "string", format: "uuid" },
+					},
+				],
+				requestBody: {
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									status: {
+										type: "string",
+										enum: ["FINALIZADA", "CANCELADA"],
+									},
+								},
+								required: ["status"],
+							},
+						},
+					},
+				},
+				responses: {
+					200: { description: "Status do pedido atualizado" },
+					400: { description: "Transição de status inválida" },
+					403: { description: "Sem permissão para alterar este pedido" },
 				},
 			},
 		},
