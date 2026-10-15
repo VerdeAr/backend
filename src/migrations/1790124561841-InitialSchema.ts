@@ -5,9 +5,7 @@ export class InitialSchema1790124561841 implements MigrationInterface {
 
 	public async up(queryRunner: QueryRunner): Promise<void> {
 		// Habilita extensão de UUID
-		await queryRunner.query(
-			`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`,
-		);
+		await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
 
 		// Enums
 		await queryRunner.query(
@@ -173,27 +171,69 @@ export class InitialSchema1790124561841 implements MigrationInterface {
 	}
 
 	public async down(queryRunner: QueryRunner): Promise<void> {
-		await queryRunner.query(`ALTER TABLE "shippings" DROP CONSTRAINT "FK_7eed2b5855b7067786e5aa106e1"`);
-		await queryRunner.query(`ALTER TABLE "shippings" DROP CONSTRAINT "FK_452446ea7b71760734a90099b78"`);
-		await queryRunner.query(`ALTER TABLE "sale_products" DROP CONSTRAINT "FK_b9ca983d791e014f1f32c12371d"`);
-		await queryRunner.query(`ALTER TABLE "sale_products" DROP CONSTRAINT "FK_694a0bbc8e8aad1f760cafe2e69"`);
-		await queryRunner.query(`ALTER TABLE "reviews" DROP CONSTRAINT "FK_4dd42f48aa60ad8c0d5d5c4ea5b"`);
-		await queryRunner.query(`ALTER TABLE "reviews" DROP CONSTRAINT "FK_e49b8f6b8f74fb09c818078f198"`);
-		await queryRunner.query(`ALTER TABLE "payments" DROP CONSTRAINT "FK_12fd861c33c885f01b9a7da7d93"`);
-		await queryRunner.query(`ALTER TABLE "payments" DROP CONSTRAINT "FK_a9272c4415ef64294b104e378ac"`);
-		await queryRunner.query(`ALTER TABLE "sales" DROP CONSTRAINT "FK_c51005b2b06cec7aa17462c54f5"`);
-		await queryRunner.query(`ALTER TABLE "messages" DROP CONSTRAINT "FK_22133395bd13b970ccd0c34ab22"`);
-		await queryRunner.query(`ALTER TABLE "messages" DROP CONSTRAINT "FK_7540635fef1922f0b156b9ef74f"`);
-		await queryRunner.query(`ALTER TABLE "cart_items" DROP CONSTRAINT "FK_30e89257a105eab7648a35c7fce"`);
-		await queryRunner.query(`ALTER TABLE "cart_items" DROP CONSTRAINT "FK_6385a745d9e12a89b859bb25623"`);
-		await queryRunner.query(`ALTER TABLE "products" DROP CONSTRAINT "FK_3c6bc52ec3da3d20774865a72ee"`);
-		await queryRunner.query(`ALTER TABLE "products" DROP CONSTRAINT "FK_9a5f6868c96e0069e699f33e124"`);
-		await queryRunner.query(`ALTER TABLE "products" DROP CONSTRAINT "FK_425ee27c69d6b8adc5d6475dcfe"`);
-		await queryRunner.query(`ALTER TABLE "chats" DROP CONSTRAINT "FK_f754443807ae962605b6158bf03"`);
-		await queryRunner.query(`ALTER TABLE "chats" DROP CONSTRAINT "FK_ec09bc2616849e329a7e4b44ffb"`);
-		await queryRunner.query(`ALTER TABLE "carts" DROP CONSTRAINT "FK_2ec1c94a977b940d85a4f498aea"`);
-		await queryRunner.query(`ALTER TABLE "sellers" DROP CONSTRAINT "FK_83f4670f0e114d0be3731bade87"`);
-		await queryRunner.query(`ALTER TABLE "users" DROP CONSTRAINT "FK_2f8c5adab8cb035920a375e8a9a"`);
+		await queryRunner.query(
+			`ALTER TABLE "shippings" DROP CONSTRAINT "FK_7eed2b5855b7067786e5aa106e1"`,
+		);
+		await queryRunner.query(
+			`ALTER TABLE "shippings" DROP CONSTRAINT "FK_452446ea7b71760734a90099b78"`,
+		);
+		await queryRunner.query(
+			`ALTER TABLE "sale_products" DROP CONSTRAINT "FK_b9ca983d791e014f1f32c12371d"`,
+		);
+		await queryRunner.query(
+			`ALTER TABLE "sale_products" DROP CONSTRAINT "FK_694a0bbc8e8aad1f760cafe2e69"`,
+		);
+		await queryRunner.query(
+			`ALTER TABLE "reviews" DROP CONSTRAINT "FK_4dd42f48aa60ad8c0d5d5c4ea5b"`,
+		);
+		await queryRunner.query(
+			`ALTER TABLE "reviews" DROP CONSTRAINT "FK_e49b8f6b8f74fb09c818078f198"`,
+		);
+		await queryRunner.query(
+			`ALTER TABLE "payments" DROP CONSTRAINT "FK_12fd861c33c885f01b9a7da7d93"`,
+		);
+		await queryRunner.query(
+			`ALTER TABLE "payments" DROP CONSTRAINT "FK_a9272c4415ef64294b104e378ac"`,
+		);
+		await queryRunner.query(
+			`ALTER TABLE "sales" DROP CONSTRAINT "FK_c51005b2b06cec7aa17462c54f5"`,
+		);
+		await queryRunner.query(
+			`ALTER TABLE "messages" DROP CONSTRAINT "FK_22133395bd13b970ccd0c34ab22"`,
+		);
+		await queryRunner.query(
+			`ALTER TABLE "messages" DROP CONSTRAINT "FK_7540635fef1922f0b156b9ef74f"`,
+		);
+		await queryRunner.query(
+			`ALTER TABLE "cart_items" DROP CONSTRAINT "FK_30e89257a105eab7648a35c7fce"`,
+		);
+		await queryRunner.query(
+			`ALTER TABLE "cart_items" DROP CONSTRAINT "FK_6385a745d9e12a89b859bb25623"`,
+		);
+		await queryRunner.query(
+			`ALTER TABLE "products" DROP CONSTRAINT "FK_3c6bc52ec3da3d20774865a72ee"`,
+		);
+		await queryRunner.query(
+			`ALTER TABLE "products" DROP CONSTRAINT "FK_9a5f6868c96e0069e699f33e124"`,
+		);
+		await queryRunner.query(
+			`ALTER TABLE "products" DROP CONSTRAINT "FK_425ee27c69d6b8adc5d6475dcfe"`,
+		);
+		await queryRunner.query(
+			`ALTER TABLE "chats" DROP CONSTRAINT "FK_f754443807ae962605b6158bf03"`,
+		);
+		await queryRunner.query(
+			`ALTER TABLE "chats" DROP CONSTRAINT "FK_ec09bc2616849e329a7e4b44ffb"`,
+		);
+		await queryRunner.query(
+			`ALTER TABLE "carts" DROP CONSTRAINT "FK_2ec1c94a977b940d85a4f498aea"`,
+		);
+		await queryRunner.query(
+			`ALTER TABLE "sellers" DROP CONSTRAINT "FK_83f4670f0e114d0be3731bade87"`,
+		);
+		await queryRunner.query(
+			`ALTER TABLE "users" DROP CONSTRAINT "FK_2f8c5adab8cb035920a375e8a9a"`,
+		);
 		await queryRunner.query(`DROP TABLE "shippings"`);
 		await queryRunner.query(`DROP TABLE "sale_products"`);
 		await queryRunner.query(`DROP TABLE "reviews"`);
