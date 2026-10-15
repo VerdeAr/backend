@@ -28,6 +28,9 @@ app.use(loggingMiddleware);
 
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDoc));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDoc));
+app.get("/api-docs.json", (_req, res) => {
+	res.json(swaggerDoc);
+});
 app.use(router);
 app.use(errorHandler);
 
