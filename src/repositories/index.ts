@@ -4,6 +4,7 @@ export * from "./category.repository";
 export * from "./measurement-unit.repository";
 export * from "./neighborhood.repository";
 export * from "./product.repository";
+export * from "./review.repository";
 export * from "./sale.repository";
 export * from "./sale-product.repository";
 export * from "./seller.repository";
