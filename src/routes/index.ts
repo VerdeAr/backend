@@ -6,6 +6,7 @@ import { measurementUnitRoutes } from "./measurement-unit.routes";
 import { neighborhoodRoutes } from "./neighborhood.routes";
 import { personRoutes } from "./person.routes";
 import { productRoutes } from "./product.routes";
+import { reviewRoutes } from "./review.routes";
 import { saleRoutes } from "./sale.routes";
 import { sellerOrderRoutes } from "./seller-order.routes";
 import { sellerProductRoutes } from "./seller-product.routes";
@@ -22,5 +23,6 @@ router.use("/vendedor/produtos", sellerProductRoutes);
 router.use("/vendedor/pedidos", sellerOrderRoutes);
 router.use("/carrinho", cartRoutes);
 router.use("/vendas", saleRoutes);
+router.use("/avaliacoes", reviewRoutes);
 
 export { router };

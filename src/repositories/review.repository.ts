@@ -1,5 +1,6 @@
 import { AppDataSource } from "@/config/database";
 import { Review } from "@/entities/Review";
+import { SaleProduct } from "@/entities/SaleProduct";
 
 export interface ProductRatingStats {
 	average_rating: number;
@@ -23,5 +24,47 @@ export const reviewRepository = AppDataSource.getRepository(Review).extend({
 				: 0,
 			review_count: Number(result?.count || 0),
 		};
+	},
+
+	// Usada para impedir duplicidade de avaliação por venda (RN-36)
+	findBySaleId(saleId: string): Promise<Review | null> {
+		return this.findOne({ where: { sale_id: saleId } });
+	},
+
+	findBySellerId(sellerId: string): Promise<Review[]> {
+		return this.createQueryBuilder("review")
+			.innerJoin("review.sale", "sale")
+			.leftJoinAndSelect("review.customer", "customer")
+			.where((qb) => {
+				const subQuery = qb
+					.subQuery()
+					.select("item.sale_id")
+					.from(SaleProduct, "item")
+					.innerJoin("item.product", "product")
+					.where("product.seller_id = :sellerId")
+					.getQuery();
+				return `sale.id IN ${subQuery}`;
+			})
+			.setParameter("sellerId", sellerId)
+			.orderBy("review.created_at", "DESC")
+			.getMany();
+	},
+
+	findByProductId(productId: string): Promise<Review[]> {
+		return this.createQueryBuilder("review")
+			.innerJoin("review.sale", "sale")
+			.leftJoinAndSelect("review.customer", "customer")
+			.where((qb) => {
+				const subQuery = qb
+					.subQuery()
+					.select("item.sale_id")
+					.from(SaleProduct, "item")
+					.where("item.product_id = :productId")
+					.getQuery();
+				return `sale.id IN ${subQuery}`;
+			})
+			.setParameter("productId", productId)
+			.orderBy("review.created_at", "DESC")
+			.getMany();
 	},
 });
