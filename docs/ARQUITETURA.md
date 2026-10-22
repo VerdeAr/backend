@@ -20,7 +20,7 @@ Escopo migrado e ativo:
 | Avaliações | Criação por clientes em vendas finalizadas e listagem pública por vendedor ou produto. |
 | Documentação | OpenAPI 3.0 em `/docs`, `/api-docs` e `/api-docs.json` (ver limitações na seção 11). |
 
-Modelado, mas **sem endpoints** hoje: `Chat` e `Message` (conversa entre cliente e vendedor) e `Shipping` (frete por bairro). As tabelas existem na migration, mas nenhum controller ou service as usa.
+Modelado, mas **sem endpoints** hoje: `Shipping` (frete por bairro). A comunicação e tempo real com `Chat` e `Message` está implementada via Socket.io e endpoints REST em `/chats` (VER-58/VER-59).
 
 ---
 
@@ -237,7 +237,7 @@ Executado em uma única transação (`SaleService.checkout`):
 - **Swagger incompleto:** não documenta `/auth/logout` nem os endpoints de `/avaliacoes`. O exemplo de bairro usa "Pato Branco", enquanto o seed usa Cornélio Procópio.
 - **Sem testes automatizados** e sem pipeline de CI neste repositório.
 - **Sem refresh token** e sem revogação de token no logout.
-- **Chat e frete por bairro** estão modelados, mas sem API.
+- **Frete por bairro** está modelado, mas sem API.
 - **`DB_*` e `JWT_SECRET`** usam `process.env` sem validação de presença na inicialização; valores ausentes só falham em tempo de execução. Em `server.ts`, uma falha ao conectar no banco apenas registra o erro, sem encerrar o processo.
 
 ---
