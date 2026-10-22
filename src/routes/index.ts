@@ -2,6 +2,7 @@ import { Router } from "express";
 import { authRoutes } from "./auth.routes";
 import { cartRoutes } from "./cart.routes";
 import { categoryRoutes } from "./category.routes";
+import { chatRoutes } from "./chat.routes";
 import { measurementUnitRoutes } from "./measurement-unit.routes";
 import { neighborhoodRoutes } from "./neighborhood.routes";
 import { personRoutes } from "./person.routes";
@@ -24,5 +25,6 @@ router.use("/vendedor/pedidos", sellerOrderRoutes);
 router.use("/carrinho", cartRoutes);
 router.use("/vendas", saleRoutes);
 router.use("/avaliacoes", reviewRoutes);
+router.use("/chats", chatRoutes);
 
 export { router };
