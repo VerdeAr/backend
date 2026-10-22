@@ -1,7 +1,8 @@
-# PLAN — Implementação da Tarefa VER-59
+# PLAN — Modelo de Planejamento de Tarefa
 
-> Plano de execução subfaseado conforme exigido pelo protocolo em `.agents/AGENTS.md`.
-> Regras: uma subtarefa por vez, verificação (`tsc --noEmit` e `npm run check`) antes de cada pausa, e nenhum comando de escrita no Git executado pela IA.
+> Modelo do plano de execução exigido pelo protocolo em `.agents/AGENTS.md`.
+> Para cada nova tarefa, preencha este arquivo (ou copie a estrutura) **antes** de alterar qualquer código e só avance após a validação do desenvolvedor.
+> Regras do plano: uma subtarefa por vez, verificação (`tsc --noEmit` e `npm run check`) antes de cada pausa, e nenhum comando de escrita no Git executado pela IA.
 
 ---
 
@@ -9,34 +10,33 @@
 
 | Campo | Valor |
 |---|---|
-| Chave Jira | `VER-59` |
-| Título | Implementa servidor socket.io, handshake jwt e persistencia de mensagens |
-| Tipo | Subtarefa |
-| Tarefa pai | `VER-58` (Mensagens e chat com WebSocket) |
+| Chave Jira | `VER-<ID>` |
+| Título | _título da issue_ |
+| Tipo | Tarefa, História ou Subtarefa |
+| Tarefa pai | `VER-<ID_PAI>` (apenas informativo; a branch usa o ID da própria tarefa) |
 | Repositório | `backend` |
-| Branch | `feat/VER-59-websocket-chat` |
-| Status no Jira | Fazendo |
+| Branch | `<tipo>/VER-<ID>-<descricao-curta-em-portugues>` |
+| Status no Jira | _A fazer, Fazendo, Revisão ou Feito_ |
 
 ## 2. Entendimento da demanda
 
-Implementar a camada de comunicação em tempo real via Socket.io com autenticação JWT no handshake (via cookie HTTP-Only e header Bearer fallback), regras de negócio RN-47 e RN-48 com persistência das entidades `Chat` e `Message` via TypeORM, e disponibilizar os endpoints REST correspondentes para histórico e controle de conversas.
+_Resumo objetivo, em poucas linhas, do que a tarefa pede e do problema que resolve._
 
-### Critérios de aceite
+### Critérios de aceite (copiados do Jira)
 
-- [ ] Servidor Socket.io configurado e acoplado ao servidor HTTP do Express em `src/server.ts`.
-- [ ] Middleware de handshake no Socket.io autenticando o usuário via JWT (cookies `auth_token`/`token` e fallback em `Authorization: Bearer`).
-- [ ] Tratamento de eventos WebSocket: `join_chat`, `leave_chat`, `send_message`, `typing_indicator` e `message_read`.
-- [ ] Persistência de mensagens no banco via TypeORM utilizando as entidades existentes `Chat` e `Message`.
-- [ ] Validação das regras de negócio RN-47 (chat exclusivo entre cliente e vendedor cadastrado) e RN-48 (validação de status `ATIVO`/`FINALIZADO`).
-- [ ] Endpoints REST protegidos para iniciar chat, listar conversas do usuário, obter histórico de mensagens paginado e marcar mensagens como lidas.
-- [ ] Validações de entrada com Zod.
-- [ ] Verificação sem erros em `tsc --noEmit` e `npm run check` (Biome).
+- [ ] _critério 1_
+- [ ] _critério 2_
+- [ ] _critério 3_
 
 ### Contexto consultado
 
-- Requisitos: `docs/REQUISITOS.md`
-- Regras de negócio: `docs/ARQUITETURA.md` (RN-47 e RN-48)
-- Arquitetura: `docs/ARQUITETURA.md` (seções de entidades `Chat`, `Message`, `User`, `Seller`)
+- Requisitos: `docs/REQUISITOS.md` (IDs RF/RNF relacionados: _RF-xx_)
+- Regras de negócio: Notion, *Regras de Negócio & Glossário* (_RN-xx_)
+- Arquitetura: `docs/ARQUITETURA.md` (seções relevantes: _x_)
+
+### Premissas, riscos e dúvidas em aberto
+
+- _premissa ou dúvida que precisa de resposta do desenvolvedor_
 
 ---
 
@@ -44,59 +44,75 @@ Implementar a camada de comunicação em tempo real via Socket.io com autentica�
 
 | Ação | Arquivo | Motivo |
 |---|---|---|
-| Editar | `package.json` | Adicionar dependência `socket.io` |
-| Editar | `src/server.ts` | Criar servidor HTTP com `http.createServer(app)` e inicializar Socket.io |
-| Criar | `src/websocket/socket.server.ts` | Handshake JWT, autenticação e gerenciamento de salas/eventos do Socket.io |
-| Criar | `src/services/chat.service.ts` | Regras RN-47/RN-48, operações TypeORM em `Chat` e `Message` |
-| Criar | `src/schemas/chat.schema.ts` | Validação Zod para criação de chat e envio de mensagens |
-| Criar | `src/controllers/chat.controller.ts` | Handlers REST para endpoints de chat |
-| Criar | `src/routes/chat.routes.ts` | Rotas REST de chat |
-| Editar | `src/routes/index.ts` | Registrar rotas de chat na API principal |
-| Editar | `docs/ANDAMENTO.md` | Atualizar status da tarefa VER-59 |
-| Editar | `docs/ARQUITETURA.md` | Documentar os novos endpoints e a camada WebSocket |
+| Criar | `src/...` | _por quê_ |
+| Editar | `src/...` | _por quê_ |
+| Editar | `docs/ARQUITETURA.md`, `README.md` | _documentação em dia, quando houver mudança de comportamento_ |
 
 ---
 
 ## 4. Fases e subtarefas
 
-### Fase 1 — WebSocket e Infraestrutura
+Legenda: `[ ]` a fazer, `[~]` em execução, `[x]` concluída e validada pelo desenvolvedor.
 
-- [x] **1.1** Instalação do `socket.io`, acoplamento do HTTP Server em `src/server.ts` e criação da infraestrutura de WebSocket com handshake JWT em `src/websocket/socket.server.ts`.
-  - **Arquivos:** `package.json`, `src/server.ts`, `src/websocket/socket.server.ts`
-  - **Entrega:** Servidor Socket.io inicializado, autenticando conexões com token JWT e gerenciando salas privadas de usuário.
-  - **Verificação:** `tsc --noEmit` e `npm run check` sem erros.
-  - **Commit sugerido:** `feat(chat): [VER-59] configura servidor socket.io e handshake jwt`
+### Fase 1 — _nome da fase_
 
-### Fase 2 — Regras de Negócio e Persistência TypeORM
+- [ ] **1.1** _subtarefa atômica_
+  - **Arquivos:** `src/...`
+  - **Entrega:** _resultado verificável_
+  - **Verificação:** `tsc --noEmit` e `npm run check` sem erros
+  - **Commit sugerido:** `feat(escopo): [VER-<ID>] descricao curta no imperativo`
+- [ ] **1.2** _subtarefa atômica_
+  - **Arquivos:** `src/...`
+  - **Entrega:** _resultado verificável_
+  - **Verificação:** `tsc --noEmit` e `npm run check` sem erros
+  - **Commit sugerido:** `feat(escopo): [VER-<ID>] descricao curta no imperativo`
 
-- [x] **1.2** Implementação do serviço de chat (`src/services/chat.service.ts`) e conexão com eventos em tempo real (`join_chat`, `send_message`, `message_read`, `typing_indicator`).
-  - **Arquivos:** `src/services/chat.service.ts`, `src/websocket/socket.server.ts`
-  - **Entrega:** Regras RN-47 e RN-48 aplicadas, persistência e consulta no banco via TypeORM, emissão e recebimento de mensagens e status de leitura em tempo real.
-  - **Verificação:** `tsc --noEmit` e `npm run check` sem erros.
-  - **Commit sugerido:** `feat(chat): [VER-59] implementa persistencia e eventos em tempo real do chat`
+### Fase 2 — _nome da fase_
 
-### Fase 3 — Endpoints REST e Schemas Zod
-
-- [x] **1.3** Implementação dos schemas Zod, controller e rotas HTTP de chat.
-  - **Arquivos:** `src/schemas/chat.schema.ts`, `src/controllers/chat.controller.ts`, `src/routes/chat.routes.ts`, `src/routes/index.ts`
-  - **Entrega:** Endpoints REST (`POST /chats`, `GET /chats`, `GET /chats/:id/messages`, `POST /chats/:id/messages`, `PATCH /chats/:id/read`, `PATCH /chats/:id/finish`) protegidos com autenticação e validação Zod.
-  - **Verificação:** `tsc --noEmit` e `npm run check` sem erros.
-  - **Commit sugerido:** `feat(chat): [VER-59] adiciona controller, rotas e schemas rest para chat`
+- [ ] **2.1** _subtarefa atômica_
+  - **Arquivos:** `src/...`
+  - **Entrega:** _resultado verificável_
+  - **Verificação:** `tsc --noEmit` e `npm run check` sem erros
+  - **Commit sugerido:** `test(escopo): [VER-<ID>] descricao curta no imperativo`
 
 ### Fase final — Documentação
 
-- [x] **F.1** Atualizar `docs/ANDAMENTO.md` e `docs/ARQUITETURA.md` refletindo a nova camada de WebSocket e endpoints de chat.
-  - **Arquivos:** `docs/ANDAMENTO.md`, `docs/ARQUITETURA.md`
-  - **Entrega:** Documentação sincronizada com a implementação.
-  - **Commit sugerido:** `docs(chat): [VER-59] atualiza documentacao arquitetural e andamento do chat`
+- [ ] **F.1** Atualizar `README.md`, `docs/ARQUITETURA.md`, `docs/REQUISITOS.md` e `docs/ANDAMENTO.md`
+  - **Commit sugerido:** `docs(escopo): [VER-<ID>] atualiza documentacao da tarefa`
+
+> Cada mensagem de commit: português, imperativo, no máximo 100 caracteres no total (tipo, escopo, ID e descrição).
 
 ---
 
 ## 5. Registro de execução
 
+Preencha ao fim de cada subtarefa, antes de pedir a validação.
+
 | Subtarefa | Status | Verificação (`tsc` e `npm run check`) | Validada pelo desenvolvedor |
 |---|---|---|---|
-| 1.1 | Concluída | Passou sem erros | Em validação |
-| 1.2 | Concluída | Passou sem erros | Em validação |
-| 1.3 | Concluída | Passou sem erros | Em validação |
-| F.1 | Concluída | Passou sem erros | Em validação |
+| 1.1 | A fazer | — | — |
+| 1.2 | A fazer | — | — |
+| 2.1 | A fazer | — | — |
+
+### Pergunta de validação (modelo)
+
+> Subtarefa [X.Y] finalizada e verificada. Podemos validar essa etapa e prosseguir para a próxima subtarefa?
+
+### Bloco de comandos Git (entregue ao desenvolvedor, nunca executado pela IA)
+
+```bash
+git checkout -b <tipo>/VER-<ID>-<descricao-curta-em-portugues>
+git add <arquivos-alterados>
+git commit -m "feat(escopo): [VER-<ID>] descricao curta no imperativo"
+git push -u origin <tipo>/VER-<ID>-<descricao-curta-em-portugues>
+```
+
+---
+
+## 6. Encerramento da tarefa
+
+- [ ] Todos os critérios de aceite atendidos
+- [ ] `tsc --noEmit` e `npm run check` sem erros
+- [ ] Documentação atualizada
+- [ ] Commits revisados com `git status` e `git diff`
+- [ ] Pull Request aberto e subtarefa movida no Jira para **Revisão**
