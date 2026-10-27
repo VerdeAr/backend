@@ -109,6 +109,11 @@ export const swaggerDoc = {
 			name: "Vendedor - Pedidos",
 			description: "Pedidos recebidos pelo vendedor (exige papel VENDEDOR)",
 		},
+		{
+			name: "Avaliações",
+			description:
+				"Avaliações de compras finalizadas, com listagem pública por produto e por vendedor",
+		},
 	],
 	components: {
 		securitySchemes: {
@@ -480,6 +485,62 @@ export const swaggerDoc = {
 				type: "object",
 				properties: productInputProperties,
 			},
+			CartProduct: {
+				type: "object",
+				description: "Resumo do produto dentro do carrinho",
+				properties: {
+					id: { type: "string", format: "uuid" },
+					name: { type: "string", example: "Alface Crespa Hidropônica" },
+					price: { type: "number", example: 4.5 },
+					stock: { type: "number", example: 50 },
+					image_url: { type: "string", nullable: true },
+					category: {
+						type: "object",
+						nullable: true,
+						properties: {
+							id: { type: "string", format: "uuid" },
+							name: { type: "string", example: "Hortifrúti" },
+						},
+					},
+					measurement_unit: {
+						type: "object",
+						nullable: true,
+						properties: {
+							id: { type: "string", format: "uuid" },
+							name: { type: "string", example: "Quilo" },
+							symbol: { type: "string", nullable: true, example: "kg" },
+						},
+					},
+					seller: {
+						type: "object",
+						nullable: true,
+						properties: {
+							id: { type: "string", format: "uuid" },
+							farm_name: {
+								type: "string",
+								nullable: true,
+								example: "Sítio Primavera",
+							},
+							user: {
+								type: "object",
+								nullable: true,
+								properties: {
+									id: { type: "string", format: "uuid" },
+									name: { type: "string", example: "Maria da Silva" },
+									fixed_shipping_rate: {
+										type: "number",
+										nullable: true,
+										description:
+											"Frete fixo do produtor, usado no cálculo da entrega",
+										example: 12.5,
+									},
+								},
+							},
+						},
+					},
+				},
+				required: ["id", "name", "price", "stock"],
+			},
 			CartItem: {
 				type: "object",
 				properties: {
@@ -487,70 +548,148 @@ export const swaggerDoc = {
 					cart_id: { type: "string", format: "uuid" },
 					product_id: { type: "string", format: "uuid" },
 					quantity: { type: "number", example: 2 },
-					unit_price: { type: "number", example: 4.5 },
-					total_price: { type: "number", example: 9.0 },
-					product: { $ref: "#/components/schemas/Product" },
+					price: {
+						type: "number",
+						description:
+							"Preço unitário gravado no item (atualizado ao alterar o carrinho)",
+						example: 4.5,
+					},
+					total: {
+						type: "number",
+						description: "quantity × price",
+						example: 9,
+					},
+					product: { $ref: "#/components/schemas/CartProduct" },
+					created_at: { type: "string", format: "date-time" },
+					updated_at: { type: "string", format: "date-time" },
 				},
-				required: ["id", "product_id", "quantity", "unit_price", "total_price"],
+				required: ["id", "cart_id", "product_id", "quantity", "price", "total"],
 			},
 			Cart: {
 				type: "object",
+				description:
+					"Carrinho persistente do usuário, com os totais já calculados. O frete soma a taxa fixa de cada produtor presente e só existe na modalidade ENTREGA.",
 				properties: {
 					id: { type: "string", format: "uuid" },
 					user_id: { type: "string", format: "uuid" },
 					delivery_type: {
 						type: "string",
-						enum: ["ENTREGA", "RETIRADA"],
+						nullable: true,
+						enum: ["ENTREGA", "RETIRADA", null],
+						description: "Nulo até o cliente escolher a modalidade",
 						example: "ENTREGA",
 					},
-					preferred_payment_method: {
+					payment_method: {
 						type: "string",
 						nullable: true,
+						description: "Forma de pagamento escolhida (descrição)",
 						example: "PIX",
 					},
-					subtotal: { type: "number", example: 18.0 },
-					shipping_fee: { type: "number", example: 10.0 },
-					total: { type: "number", example: 28.0 },
 					items: {
 						type: "array",
 						items: { $ref: "#/components/schemas/CartItem" },
 					},
+					subtotal: { type: "number", example: 27 },
+					shipping: { type: "number", example: 12.5 },
+					total: { type: "number", example: 39.5 },
+					total_items: {
+						type: "number",
+						description: "Soma das quantidades dos itens",
+						example: 3,
+					},
+					created_at: { type: "string", format: "date-time" },
+					updated_at: { type: "string", format: "date-time" },
 				},
 				required: [
 					"id",
 					"user_id",
-					"delivery_type",
-					"subtotal",
-					"shipping_fee",
-					"total",
 					"items",
+					"subtotal",
+					"shipping",
+					"total",
+					"total_items",
 				],
 			},
-			SaleItem: {
+			PaymentMethod: {
+				type: "object",
+				properties: {
+					id: { type: "string", format: "uuid" },
+					description: { type: "string", example: "PIX" },
+					created_at: { type: "string", format: "date-time" },
+					updated_at: { type: "string", format: "date-time" },
+				},
+				required: ["id", "description"],
+			},
+			CheckoutSaleItem: {
 				type: "object",
 				properties: {
 					id: { type: "string", format: "uuid" },
 					sale_id: { type: "string", format: "uuid" },
 					product_id: { type: "string", format: "uuid" },
-					product_name: { type: "string", example: "Alface Crespa" },
-					quantity: { type: "number", example: 2 },
-					unit_price: { type: "number", example: 4.5 },
-					total: { type: "number", example: 9.0 },
+					product: {
+						allOf: [{ $ref: "#/components/schemas/Product" }],
+						description:
+							"Produto com o estoque já atualizado, a unidade de medida e o produtor (id, nome e telefone)",
+						properties: {
+							seller: {
+								allOf: [{ $ref: "#/components/schemas/SellerProfile" }],
+								properties: {
+									user: {
+										type: "object",
+										properties: {
+											id: { type: "string", format: "uuid" },
+											name: { type: "string" },
+											phone: { type: "string", nullable: true },
+										},
+									},
+								},
+							},
+						},
+					},
+					quantity: {
+						type: "string",
+						description: "Quantidade comprada, serializada como texto",
+						example: "3.000",
+					},
+					unit_price: {
+						type: "string",
+						description:
+							"Preço unitário no momento da compra, serializado como texto",
+						example: "9.00",
+					},
+					created_at: { type: "string", format: "date-time" },
+					updated_at: { type: "string", format: "date-time" },
 				},
-				required: [
-					"id",
-					"product_id",
-					"product_name",
-					"quantity",
-					"unit_price",
-					"total",
-				],
+				required: ["id", "sale_id", "product_id", "quantity", "unit_price"],
 			},
-			Sale: {
+			Payment: {
 				type: "object",
 				properties: {
 					id: { type: "string", format: "uuid" },
+					sale_id: { type: "string", format: "uuid" },
+					payment_method_id: { type: "string", format: "uuid", nullable: true },
+					payment_method: {
+						allOf: [{ $ref: "#/components/schemas/PaymentMethod" }],
+						nullable: true,
+					},
+					amount: {
+						type: "string",
+						description: "Valor registrado, serializado como texto",
+						example: "39.50",
+					},
+					created_at: { type: "string", format: "date-time" },
+					updated_at: { type: "string", format: "date-time" },
+				},
+				required: ["id", "sale_id", "amount"],
+			},
+			CheckoutSale: {
+				type: "object",
+				description:
+					"Venda recém-criada, como retornada pelo checkout (entidades completas; valores decimais como texto)",
+				properties: {
+					id: { type: "string", format: "uuid" },
 					customer_id: { type: "string", format: "uuid" },
+					customer: { $ref: "#/components/schemas/UserResponse" },
 					delivery_type: {
 						type: "string",
 						enum: ["ENTREGA", "RETIRADA"],
@@ -561,10 +700,18 @@ export const swaggerDoc = {
 						enum: ["ABERTA", "FINALIZADA", "CANCELADA"],
 						example: "ABERTA",
 					},
-					total_amount: { type: "number", example: 28.0 },
+					total_amount: {
+						type: "string",
+						description: "Subtotal + frete, serializado como texto",
+						example: "39.50",
+					},
 					items: {
 						type: "array",
-						items: { $ref: "#/components/schemas/SaleItem" },
+						items: { $ref: "#/components/schemas/CheckoutSaleItem" },
+					},
+					payments: {
+						type: "array",
+						items: { $ref: "#/components/schemas/Payment" },
 					},
 					created_at: { type: "string", format: "date-time" },
 					updated_at: { type: "string", format: "date-time" },
@@ -576,7 +723,220 @@ export const swaggerDoc = {
 					"status",
 					"total_amount",
 					"items",
+					"payments",
 				],
+			},
+			FormattedSaleItem: {
+				type: "object",
+				description: "Item de venda com os totais já calculados",
+				properties: {
+					id: { type: "string", format: "uuid" },
+					product_id: { type: "string", format: "uuid" },
+					product_name: { type: "string", example: "Alface Crespa" },
+					product_image: { type: "string", nullable: true },
+					measurement_unit: {
+						type: "string",
+						nullable: true,
+						description:
+							"Símbolo da unidade (ou o nome, se não houver símbolo)",
+						example: "kg",
+					},
+					quantity: { type: "number", example: 3 },
+					unit_price: { type: "number", example: 9 },
+					total: { type: "number", example: 27 },
+					seller: {
+						type: "object",
+						nullable: true,
+						description:
+							"Produtor do item (presente no histórico de compras do cliente)",
+						properties: {
+							id: { type: "string", format: "uuid" },
+							name: { type: "string" },
+							phone: { type: "string", nullable: true },
+						},
+					},
+				},
+				required: [
+					"id",
+					"product_id",
+					"product_name",
+					"quantity",
+					"unit_price",
+					"total",
+				],
+			},
+			Purchase: {
+				type: "object",
+				description: "Compra do cliente, como listada no histórico",
+				properties: {
+					id: { type: "string", format: "uuid" },
+					delivery_type: { type: "string", enum: ["ENTREGA", "RETIRADA"] },
+					status: {
+						type: "string",
+						enum: ["ABERTA", "FINALIZADA", "CANCELADA"],
+					},
+					total_amount: { type: "number", example: 39.5 },
+					created_at: { type: "string", format: "date-time" },
+					updated_at: { type: "string", format: "date-time" },
+					payments: {
+						type: "array",
+						items: {
+							type: "object",
+							properties: {
+								id: { type: "string", format: "uuid" },
+								amount: { type: "number", example: 39.5 },
+								payment_method: {
+									type: "string",
+									nullable: true,
+									example: "PIX",
+								},
+							},
+							required: ["id", "amount"],
+						},
+					},
+					items: {
+						type: "array",
+						items: { $ref: "#/components/schemas/FormattedSaleItem" },
+					},
+				},
+				required: [
+					"id",
+					"delivery_type",
+					"status",
+					"total_amount",
+					"payments",
+					"items",
+				],
+			},
+			SellerOrder: {
+				type: "object",
+				description:
+					"Pedido visto pelo vendedor: apenas os itens dos produtos dele, com o subtotal da sua parte",
+				properties: {
+					id: { type: "string", format: "uuid" },
+					status: {
+						type: "string",
+						enum: ["ABERTA", "FINALIZADA", "CANCELADA"],
+					},
+					delivery_type: { type: "string", enum: ["ENTREGA", "RETIRADA"] },
+					created_at: { type: "string", format: "date-time" },
+					customer: {
+						type: "object",
+						properties: {
+							id: { type: "string", format: "uuid" },
+							name: { type: "string" },
+							email: { type: "string", format: "email" },
+							phone: { type: "string", nullable: true },
+							address: { type: "string", nullable: true },
+							neighborhood: {
+								type: "string",
+								nullable: true,
+								description: "Nome do bairro do cliente",
+							},
+						},
+						required: ["id", "name", "email"],
+					},
+					items: {
+						type: "array",
+						items: { $ref: "#/components/schemas/FormattedSaleItem" },
+					},
+					seller_subtotal: {
+						type: "number",
+						description: "Soma dos itens deste vendedor",
+						example: 27,
+					},
+					order_total: {
+						type: "number",
+						description:
+							"Total do pedido inteiro (inclui frete e itens de outros vendedores)",
+						example: 39.5,
+					},
+				},
+				required: [
+					"id",
+					"status",
+					"delivery_type",
+					"customer",
+					"items",
+					"seller_subtotal",
+					"order_total",
+				],
+			},
+			UpdateSaleStatusInput: {
+				type: "object",
+				properties: {
+					status: {
+						type: "string",
+						enum: ["ABERTA", "FINALIZADA", "CANCELADA"],
+						description:
+							"Transições válidas: ABERTA → FINALIZADA ou ABERTA → CANCELADA. Enviar o mesmo status atual não altera nada.",
+						example: "FINALIZADA",
+					},
+				},
+				required: ["status"],
+			},
+			Review: {
+				type: "object",
+				description:
+					"Avaliação registrada pelo cliente para uma compra finalizada",
+				properties: {
+					id: { type: "string", format: "uuid" },
+					sale_id: { type: "string", format: "uuid" },
+					customer_id: { type: "string", format: "uuid" },
+					rating: { type: "integer", minimum: 1, maximum: 5, example: 5 },
+					comment: {
+						type: "string",
+						nullable: true,
+						maxLength: 500,
+						example: "Produto fresquinho, chegou no prazo.",
+					},
+					created_at: { type: "string", format: "date-time" },
+					updated_at: { type: "string", format: "date-time" },
+				},
+				required: ["id", "sale_id", "customer_id", "rating"],
+			},
+			FormattedReview: {
+				type: "object",
+				description: "Avaliação pública, com o nome do cliente que avaliou",
+				properties: {
+					id: { type: "string", format: "uuid" },
+					rating: { type: "integer", minimum: 1, maximum: 5, example: 5 },
+					comment: { type: "string", nullable: true, example: "Muito bom!" },
+					created_at: { type: "string", format: "date-time" },
+					customer: {
+						type: "object",
+						properties: {
+							id: { type: "string", format: "uuid" },
+							name: { type: "string", example: "Maria da Silva" },
+						},
+						required: ["id", "name"],
+					},
+				},
+				required: ["id", "rating", "created_at", "customer"],
+			},
+			CreateReviewInput: {
+				type: "object",
+				properties: {
+					sale_id: {
+						type: "string",
+						format: "uuid",
+						description: "ID da compra (venda) a avaliar",
+					},
+					rating: {
+						type: "integer",
+						minimum: 1,
+						maximum: 5,
+						description: "Nota inteira de 1 a 5",
+						example: 5,
+					},
+					comment: {
+						type: "string",
+						nullable: true,
+						maxLength: 500,
+						description: "Comentário opcional",
+					},
+				},
+				required: ["sale_id", "rating"],
 			},
 		},
 	},
@@ -800,6 +1160,34 @@ export const swaggerDoc = {
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+				},
+			},
+		},
+		"/auth/logout": {
+			post: {
+				tags: ["Autenticação"],
+				summary: "Encerrar a sessão do usuário",
+				description:
+					"Limpa o cookie `token` no navegador. É pública, e tokens já emitidos continuam válidos até expirar (não há revogação).",
+				responses: {
+					200: {
+						description: "Sessão encerrada; o cookie `token` é removido",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										success: { type: "boolean", example: true },
+										message: {
+											type: "string",
+											example: "Logout realizado com sucesso.",
+										},
+									},
+									required: ["success", "message"],
+								},
 							},
 						},
 					},
@@ -1358,7 +1746,9 @@ export const swaggerDoc = {
 		"/carrinho": {
 			get: {
 				tags: ["Carrinho"],
-				summary: "Obter carrinho persistente do usuário com itens e cálculos",
+				summary: "Obter o carrinho do usuário autenticado",
+				description:
+					"O carrinho é criado sob demanda e persiste entre sessões. Subtotal, frete e total já vêm calculados.",
 				security: authenticated,
 				responses: {
 					200: {
@@ -1369,19 +1759,13 @@ export const swaggerDoc = {
 							},
 						},
 					},
-					401: {
-						description: "Não autenticado",
-						content: {
-							"application/json": {
-								schema: { $ref: "#/components/schemas/ErrorResponse" },
-							},
-						},
-					},
+					401: { $ref: "#/components/responses/Unauthorized" },
 				},
 			},
 			delete: {
 				tags: ["Carrinho"],
-				summary: "Esvaziar todos os itens do carrinho",
+				summary: "Esvaziar o carrinho",
+				description: "Remove todos os itens e devolve o carrinho vazio.",
 				security: authenticated,
 				responses: {
 					200: {
@@ -1392,21 +1776,16 @@ export const swaggerDoc = {
 							},
 						},
 					},
-					401: {
-						description: "Não autenticado",
-						content: {
-							"application/json": {
-								schema: { $ref: "#/components/schemas/ErrorResponse" },
-							},
-						},
-					},
+					401: { $ref: "#/components/responses/Unauthorized" },
 				},
 			},
 		},
 		"/carrinho/itens": {
 			post: {
 				tags: ["Carrinho"],
-				summary: "Adicionar item ou incrementar quantidade no carrinho",
+				summary: "Adicionar um produto ao carrinho",
+				description:
+					"Se o produto já estiver no carrinho, a quantidade é somada. O preço do item é atualizado para o preço atual do produto.",
 				security: authenticated,
 				requestBody: {
 					required: true,
@@ -1416,7 +1795,14 @@ export const swaggerDoc = {
 								type: "object",
 								properties: {
 									product_id: { type: "string", format: "uuid" },
-									quantity: { type: "number", minimum: 1, default: 1 },
+									quantity: {
+										type: "number",
+										exclusiveMinimum: true,
+										minimum: 0,
+										default: 1,
+										description: "Maior que zero; aceita frações",
+										example: 2,
+									},
 								},
 								required: ["product_id"],
 							},
@@ -1425,7 +1811,7 @@ export const swaggerDoc = {
 				},
 				responses: {
 					200: {
-						description: "Item adicionado ao carrinho",
+						description: "Item adicionado; retorna o carrinho atualizado",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/Cart" },
@@ -1433,15 +1819,17 @@ export const swaggerDoc = {
 						},
 					},
 					400: {
-						description: "Quantidade excede estoque ou produto esgotado",
+						description:
+							"Dados inválidos, produto esgotado ou quantidade acima do estoque",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
 							},
 						},
 					},
+					401: { $ref: "#/components/responses/Unauthorized" },
 					404: {
-						description: "Produto não encontrado",
+						description: "Produto não encontrado ou inativo",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
@@ -1454,14 +1842,12 @@ export const swaggerDoc = {
 		"/carrinho/itens/{id}": {
 			patch: {
 				tags: ["Carrinho"],
-				summary: "Atualizar quantidade de item existente no carrinho",
+				summary: "Alterar a quantidade de um item do carrinho",
 				security: authenticated,
 				parameters: [
 					{
-						name: "id",
-						in: "path",
-						required: true,
-						schema: { type: "string", format: "uuid" },
+						...idPathParameter,
+						description: "ID do item do carrinho (não do produto)",
 					},
 				],
 				requestBody: {
@@ -1471,7 +1857,12 @@ export const swaggerDoc = {
 							schema: {
 								type: "object",
 								properties: {
-									quantity: { type: "number", minimum: 1, example: 2 },
+									quantity: {
+										type: "number",
+										exclusiveMinimum: true,
+										minimum: 0,
+										example: 3,
+									},
 								},
 								required: ["quantity"],
 							},
@@ -1480,7 +1871,7 @@ export const swaggerDoc = {
 				},
 				responses: {
 					200: {
-						description: "Quantidade atualizada com sucesso",
+						description: "Quantidade alterada; retorna o carrinho atualizado",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/Cart" },
@@ -1488,15 +1879,17 @@ export const swaggerDoc = {
 						},
 					},
 					400: {
-						description: "Quantidade inválida ou excede estoque",
+						description:
+							"Dados inválidos, produto indisponível ou quantidade acima do estoque",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
 							},
 						},
 					},
+					401: { $ref: "#/components/responses/Unauthorized" },
 					404: {
-						description: "Item não encontrado no carrinho",
+						description: "Item não encontrado no carrinho do usuário",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
@@ -1507,27 +1900,27 @@ export const swaggerDoc = {
 			},
 			delete: {
 				tags: ["Carrinho"],
-				summary: "Remover item específico do carrinho",
+				summary: "Remover um item do carrinho",
 				security: authenticated,
 				parameters: [
 					{
-						name: "id",
-						in: "path",
-						required: true,
-						schema: { type: "string", format: "uuid" },
+						...idPathParameter,
+						description: "ID do item do carrinho (não do produto)",
 					},
 				],
 				responses: {
 					200: {
-						description: "Item removido com sucesso",
+						description: "Item removido; retorna o carrinho atualizado",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/Cart" },
 							},
 						},
 					},
+					400: { $ref: "#/components/responses/ValidationError" },
+					401: { $ref: "#/components/responses/Unauthorized" },
 					404: {
-						description: "Item não encontrado no carrinho",
+						description: "Item não encontrado no carrinho do usuário",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
@@ -1540,7 +1933,9 @@ export const swaggerDoc = {
 		"/carrinho/entrega": {
 			post: {
 				tags: ["Carrinho"],
-				summary: "Definir modalidade de entrega (ENTREGA ou RETIRADA)",
+				summary: "Definir a modalidade de entrega",
+				description:
+					"ENTREGA soma o frete fixo de cada produtor ao total; RETIRADA não tem frete.",
 				security: authenticated,
 				requestBody: {
 					required: true,
@@ -1561,28 +1956,24 @@ export const swaggerDoc = {
 				},
 				responses: {
 					200: {
-						description: "Modalidade de entrega atualizada",
+						description: "Modalidade definida; retorna o carrinho recalculado",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/Cart" },
 							},
 						},
 					},
-					400: {
-						description: "Modalidade inválida",
-						content: {
-							"application/json": {
-								schema: { $ref: "#/components/schemas/ErrorResponse" },
-							},
-						},
-					},
+					400: { $ref: "#/components/responses/ValidationError" },
+					401: { $ref: "#/components/responses/Unauthorized" },
 				},
 			},
 		},
 		"/carrinho/pagamento": {
 			post: {
 				tags: ["Carrinho"],
-				summary: "Salvar preferência de forma de pagamento no carrinho",
+				summary: "Definir a forma de pagamento preferida",
+				description:
+					"Apenas registra a preferência (por exemplo Cartão, PIX, Dinheiro ou Boleto). A plataforma não processa pagamentos.",
 				security: authenticated,
 				requestBody: {
 					required: true,
@@ -1591,7 +1982,12 @@ export const swaggerDoc = {
 							schema: {
 								type: "object",
 								properties: {
-									payment_method: { type: "string", example: "PIX" },
+									payment_method: {
+										type: "string",
+										minLength: 1,
+										maxLength: 100,
+										example: "PIX",
+									},
 								},
 								required: ["payment_method"],
 							},
@@ -1600,22 +1996,28 @@ export const swaggerDoc = {
 				},
 				responses: {
 					200: {
-						description: "Forma de pagamento salva",
+						description: "Forma de pagamento salva; retorna o carrinho",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/Cart" },
 							},
 						},
 					},
+					400: { $ref: "#/components/responses/ValidationError" },
+					401: { $ref: "#/components/responses/Unauthorized" },
 				},
 			},
 		},
 		"/vendas/checkout": {
 			post: {
 				tags: ["Vendas e Checkout"],
-				summary: "Realizar checkout transacional com garantia ACID",
+				summary: "Finalizar a compra a partir do carrinho",
+				description:
+					"Executa tudo em uma transação: valida o estoque com bloqueio, baixa o estoque, cria a venda como ABERTA com o preço de cada item, registra o pagamento e esvazia o carrinho. " +
+					"Se `delivery_type` ou `payment_method` não forem enviados, usa os valores salvos no carrinho (pagamento padrão: Dinheiro).",
 				security: authenticated,
 				requestBody: {
+					required: false,
 					content: {
 						"application/json": {
 							schema: {
@@ -1625,7 +2027,13 @@ export const swaggerDoc = {
 										type: "string",
 										enum: ["ENTREGA", "RETIRADA"],
 									},
-									payment_method: { type: "string", example: "PIX" },
+									payment_method: {
+										type: "string",
+										minLength: 1,
+										maxLength: 100,
+										description: "Descrição ou ID da forma de pagamento",
+										example: "PIX",
+									},
 								},
 							},
 						},
@@ -1633,15 +2041,25 @@ export const swaggerDoc = {
 				},
 				responses: {
 					201: {
-						description: "Pedido criado com sucesso",
+						description: "Venda criada com sucesso",
 						content: {
 							"application/json": {
-								schema: { $ref: "#/components/schemas/Sale" },
+								schema: { $ref: "#/components/schemas/CheckoutSale" },
 							},
 						},
 					},
 					400: {
-						description: "Estoque insuficiente ou carrinho vazio",
+						description:
+							"Carrinho vazio, modalidade de entrega indefinida, produto desativado ou estoque insuficiente",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					401: { $ref: "#/components/responses/Unauthorized" },
+					404: {
+						description: "Um dos produtos do carrinho não existe mais",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
@@ -1654,159 +2072,43 @@ export const swaggerDoc = {
 		"/vendas/minhas-compras": {
 			get: {
 				tags: ["Vendas e Checkout"],
-				summary: "Listar histórico de compras do cliente autenticado",
+				summary: "Listar as compras do cliente autenticado",
 				security: authenticated,
 				responses: {
 					200: {
-						description: "Lista de compras retornada com sucesso",
+						description: "Histórico de compras retornado com sucesso",
 						content: {
 							"application/json": {
 								schema: {
 									type: "array",
-									items: { $ref: "#/components/schemas/Sale" },
+									items: { $ref: "#/components/schemas/Purchase" },
 								},
 							},
 						},
 					},
+					401: { $ref: "#/components/responses/Unauthorized" },
 				},
 			},
 		},
 		"/vendas/{id}": {
 			get: {
 				tags: ["Vendas e Checkout"],
-				summary: "Obter detalhes de uma compra específica do cliente",
+				summary: "Obter o detalhe de uma compra do cliente autenticado",
 				security: authenticated,
-				parameters: [
-					{
-						name: "id",
-						in: "path",
-						required: true,
-						schema: { type: "string", format: "uuid" },
-					},
-				],
+				parameters: [idPathParameter],
 				responses: {
 					200: {
-						description: "Detalhes da compra retornados",
+						description: "Compra retornada com sucesso",
 						content: {
 							"application/json": {
-								schema: { $ref: "#/components/schemas/Sale" },
+								schema: { $ref: "#/components/schemas/Purchase" },
 							},
 						},
 					},
+					400: { $ref: "#/components/responses/ValidationError" },
+					401: { $ref: "#/components/responses/Unauthorized" },
 					404: {
-						description: "Compra não encontrada",
-						content: {
-							"application/json": {
-								schema: { $ref: "#/components/schemas/ErrorResponse" },
-							},
-						},
-					},
-				},
-			},
-		},
-		"/vendedor/pedidos": {
-			get: {
-				tags: ["Vendedor - Pedidos"],
-				summary: "Listar pedidos recebidos pelo produtor rural",
-				security: authenticated,
-				parameters: [
-					{
-						name: "status",
-						in: "query",
-						required: false,
-						schema: {
-							type: "string",
-							enum: ["ABERTA", "FINALIZADA", "CANCELADA"],
-						},
-					},
-				],
-				responses: {
-					200: {
-						description: "Lista de pedidos retornada",
-						content: {
-							"application/json": {
-								schema: {
-									type: "array",
-									items: { $ref: "#/components/schemas/Sale" },
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		"/vendedor/pedidos/pendentes/count": {
-			get: {
-				tags: ["Vendedor - Pedidos"],
-				summary: "Contagem de pedidos pendentes para notificações do produtor",
-				security: authenticated,
-				responses: {
-					200: {
-						description: "Contagem retornada",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										count: { type: "integer", example: 3 },
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		"/vendedor/pedidos/{id}/status": {
-			patch: {
-				tags: ["Vendedor - Pedidos"],
-				summary:
-					"Atualizar status do pedido pelo vendedor (com estorno de estoque em cancelamento)",
-				security: authenticated,
-				parameters: [
-					{
-						name: "id",
-						in: "path",
-						required: true,
-						schema: { type: "string", format: "uuid" },
-					},
-				],
-				requestBody: {
-					required: true,
-					content: {
-						"application/json": {
-							schema: {
-								type: "object",
-								properties: {
-									status: {
-										type: "string",
-										enum: ["FINALIZADA", "CANCELADA"],
-									},
-								},
-								required: ["status"],
-							},
-						},
-					},
-				},
-				responses: {
-					200: {
-						description: "Status do pedido atualizado",
-						content: {
-							"application/json": {
-								schema: { $ref: "#/components/schemas/Sale" },
-							},
-						},
-					},
-					400: {
-						description: "Transição de status inválida",
-						content: {
-							"application/json": {
-								schema: { $ref: "#/components/schemas/ErrorResponse" },
-							},
-						},
-					},
-					403: {
-						description: "Sem permissão para alterar este pedido",
+						description: "Compra não encontrada ou de outro cliente",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
@@ -1819,59 +2121,282 @@ export const swaggerDoc = {
 		"/vendas/{id}/status": {
 			patch: {
 				tags: ["Vendas e Checkout"],
-				summary:
-					"Atualizar status do pedido (com estorno de estoque em cancelamento)",
+				summary: "Alterar o status de uma venda (vendedor)",
+				description:
+					"Equivalente a `PATCH /vendedor/pedidos/{id}/status` (mesmo comportamento e resposta); é a rota usada pelo frontend. " +
+					"Apenas vendedores com produtos na venda podem alterá-la. ABERTA → FINALIZADA ou ABERTA → CANCELADA; ao cancelar, o estoque dos itens é devolvido.",
 				security: authenticated,
-				parameters: [
-					{
-						name: "id",
-						in: "path",
-						required: true,
-						schema: { type: "string", format: "uuid" },
-					},
-				],
+				parameters: [idPathParameter],
 				requestBody: {
 					required: true,
 					content: {
 						"application/json": {
-							schema: {
-								type: "object",
-								properties: {
-									status: {
-										type: "string",
-										enum: ["FINALIZADA", "CANCELADA"],
-									},
-								},
-								required: ["status"],
-							},
+							schema: { $ref: "#/components/schemas/UpdateSaleStatusInput" },
 						},
 					},
 				},
 				responses: {
 					200: {
-						description: "Status do pedido atualizado",
+						description:
+							"Status atualizado; retorna o pedido na visão do vendedor",
 						content: {
 							"application/json": {
-								schema: { $ref: "#/components/schemas/Sale" },
+								schema: { $ref: "#/components/schemas/SellerOrder" },
 							},
 						},
 					},
 					400: {
-						description: "Transição de status inválida",
+						description:
+							"Dados inválidos ou venda já finalizada ou cancelada (estados finais não mudam)",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
 							},
 						},
 					},
+					401: { $ref: "#/components/responses/Unauthorized" },
 					403: {
-						description: "Sem permissão para alterar este pedido",
+						description:
+							"Permissão restrita a vendedores ou venda sem produtos do vendedor",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
 							},
 						},
 					},
+					404: {
+						description: "Venda ou perfil de vendedor não encontrado",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+				},
+			},
+		},
+		"/vendedor/pedidos": {
+			get: {
+				tags: ["Vendedor - Pedidos"],
+				summary: "Listar os pedidos que contêm produtos do vendedor",
+				description:
+					"Cada pedido mostra apenas os itens do vendedor logado, com o subtotal da sua parte.",
+				security: authenticated,
+				parameters: [
+					{
+						name: "status",
+						in: "query",
+						required: false,
+						schema: {
+							type: "string",
+							enum: ["ABERTA", "FINALIZADA", "CANCELADA"],
+						},
+						description: "Filtrar por status",
+					},
+				],
+				responses: {
+					200: {
+						description: "Pedidos retornados com sucesso",
+						content: {
+							"application/json": {
+								schema: {
+									type: "array",
+									items: { $ref: "#/components/schemas/SellerOrder" },
+								},
+							},
+						},
+					},
+					400: { $ref: "#/components/responses/ValidationError" },
+					401: { $ref: "#/components/responses/Unauthorized" },
+					403: { $ref: "#/components/responses/Forbidden" },
+					404: { $ref: "#/components/responses/NotFound" },
+				},
+			},
+		},
+		"/vendedor/pedidos/pendentes/count": {
+			get: {
+				tags: ["Vendedor - Pedidos"],
+				summary: "Contar os pedidos pendentes (ABERTA) do vendedor",
+				security: authenticated,
+				responses: {
+					200: {
+						description: "Contagem retornada com sucesso",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: { count: { type: "integer", example: 3 } },
+									required: ["count"],
+								},
+							},
+						},
+					},
+					401: { $ref: "#/components/responses/Unauthorized" },
+					403: { $ref: "#/components/responses/Forbidden" },
+				},
+			},
+		},
+		"/vendedor/pedidos/{id}/status": {
+			patch: {
+				tags: ["Vendedor - Pedidos"],
+				summary: "Alterar o status de um pedido do vendedor",
+				description:
+					"Equivalente a `PATCH /vendas/{id}/status` (mesmo comportamento e resposta). " +
+					"ABERTA → FINALIZADA ou ABERTA → CANCELADA; ao cancelar, o estoque dos itens é devolvido.",
+				security: authenticated,
+				parameters: [idPathParameter],
+				requestBody: {
+					required: true,
+					content: {
+						"application/json": {
+							schema: { $ref: "#/components/schemas/UpdateSaleStatusInput" },
+						},
+					},
+				},
+				responses: {
+					200: {
+						description:
+							"Status atualizado; retorna o pedido na visão do vendedor",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/SellerOrder" },
+							},
+						},
+					},
+					400: {
+						description:
+							"Dados inválidos ou pedido já finalizado ou cancelado (estados finais não mudam)",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					401: { $ref: "#/components/responses/Unauthorized" },
+					403: {
+						description:
+							"Permissão restrita a vendedores ou pedido sem produtos do vendedor",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					404: {
+						description: "Pedido ou perfil de vendedor não encontrado",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+				},
+			},
+		},
+		"/avaliacoes": {
+			post: {
+				tags: ["Avaliações"],
+				summary: "Avaliar uma compra finalizada",
+				description:
+					"Somente o cliente que fez a compra pode avaliá-la, apenas quando ela estiver FINALIZADA e uma única vez. A avaliação não pode ser editada nem excluída.",
+				security: authenticated,
+				requestBody: {
+					required: true,
+					content: {
+						"application/json": {
+							schema: { $ref: "#/components/schemas/CreateReviewInput" },
+						},
+					},
+				},
+				responses: {
+					201: {
+						description: "Avaliação registrada com sucesso",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/Review" },
+							},
+						},
+					},
+					400: {
+						description:
+							"Dados inválidos, compra ainda não finalizada ou compra já avaliada",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					401: { $ref: "#/components/responses/Unauthorized" },
+					404: {
+						description: "Compra não encontrada ou pertencente a outro cliente",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+				},
+			},
+		},
+		"/avaliacoes/vendedor/{sellerId}": {
+			get: {
+				tags: ["Avaliações"],
+				summary: "Listar as avaliações recebidas pelos produtos de um vendedor",
+				description:
+					"Rota pública, da mais recente para a mais antiga. O `sellerId` é o ID do perfil de vendedor (`seller.id`), não o ID do usuário.",
+				parameters: [
+					{
+						name: "sellerId",
+						in: "path",
+						required: true,
+						description: "ID do perfil de vendedor (`seller.id`)",
+						schema: { type: "string", format: "uuid" },
+					},
+				],
+				responses: {
+					200: {
+						description: "Avaliações retornadas com sucesso",
+						content: {
+							"application/json": {
+								schema: {
+									type: "array",
+									items: { $ref: "#/components/schemas/FormattedReview" },
+								},
+							},
+						},
+					},
+					400: { $ref: "#/components/responses/ValidationError" },
+				},
+			},
+		},
+		"/avaliacoes/produto/{productId}": {
+			get: {
+				tags: ["Avaliações"],
+				summary: "Listar as avaliações recebidas por um produto",
+				description:
+					"Rota pública, da mais recente para a mais antiga. A média e a contagem do produto também aparecem em `GET /produtos/{id}`.",
+				parameters: [
+					{
+						name: "productId",
+						in: "path",
+						required: true,
+						description: "ID do produto",
+						schema: { type: "string", format: "uuid" },
+					},
+				],
+				responses: {
+					200: {
+						description: "Avaliações retornadas com sucesso",
+						content: {
+							"application/json": {
+								schema: {
+									type: "array",
+									items: { $ref: "#/components/schemas/FormattedReview" },
+								},
+							},
+						},
+					},
+					400: { $ref: "#/components/responses/ValidationError" },
 				},
 			},
 		},
