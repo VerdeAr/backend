@@ -28,9 +28,9 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(loggingMiddleware);
 
+// Documentação: interface em /docs e especificação OpenAPI em /docs.json
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDoc));
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDoc));
-app.get("/api-docs.json", (_req, res) => {
+app.get("/docs.json", (_req, res) => {
 	res.json(swaggerDoc);
 });
 app.use(router);

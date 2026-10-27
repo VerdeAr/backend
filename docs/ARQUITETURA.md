@@ -18,7 +18,7 @@ Escopo migrado e ativo:
 | Checkout | `Sale`, `SaleProduct` e `Payment` criados em uma transação, com lock pessimista de estoque. |
 | Pedidos do vendedor | Listagem filtrável por status, contador de pendentes e mudança de status com estorno de estoque no cancelamento. |
 | Avaliações | Criação por clientes em vendas finalizadas e listagem pública por vendedor ou produto. |
-| Documentação | OpenAPI 3.0 em `/docs`, `/api-docs` e `/api-docs.json` (ver limitações na seção 11). |
+| Documentação | OpenAPI 3.0 com interface em `/docs` e especificação em `/docs.json`, cobrindo todas as rotas ativas. |
 
 Modelado, mas **sem endpoints** hoje: `Shipping` (frete por bairro). A comunicação e tempo real com `Chat` e `Message` está implementada via Socket.io e endpoints REST em `/chats` (VER-58/VER-59).
 
@@ -146,7 +146,7 @@ Pontos importantes do modelo:
 ## 7. Autenticação e autorização
 
 - **Emissão:** `POST /auth/register` e `POST /auth/login` gravam o JWT em um cookie `token` (`httpOnly`, `sameSite: lax`, `secure` apenas em produção, validade de 7 dias). O frontend depende exclusivamente desse cookie (VER-74): o token não fica acessível a JavaScript, então não está em `localStorage` nem em `document.cookie`.
-- **Leitura:** `ensureAuthenticated` lê o token do cookie `token`. O cabeçalho `Authorization: Bearer <token>` continua aceito como alternativa para clientes de API e para o botão *Authorize* do Swagger.
+- **Leitura:** `ensureAuthenticated` lê o token do cookie `token`. O cabeçalho `Authorization: Bearer <token>` continua aceito como alternativa para clientes de API. O Swagger declara os dois esquemas (`cookieAuth` e `bearerAuth`); as rotas protegidas aceitam qualquer um.
 - **Payload do JWT:** `{ id, role }`, com expiração de 7 dias. Não há refresh token.
 - **Resposta de erro:** 401 para token ausente, inválido ou expirado; 403 quando o papel não é permitido.
 - **Logout:** `POST /auth/logout` limpa o cookie no servidor. Um token já emitido continua válido até expirar, pois não há revogação.
@@ -229,12 +229,12 @@ Executado em uma única transação (`SaleService.checkout`):
 4. **Idioma:** domínio e rotas em português (`/produtos`, `/carrinho`); código e mensagens de erro em português do Brasil.
 5. **Segredos:** nada de credenciais no código; tudo via `.env`.
 6. **Qualidade:** `npm run check` (`tsc --noEmit` + Biome com `--error-on-warnings`) deve passar antes de abrir PR. O hook `pre-commit` roda o Biome em `src/` e o `commit-msg` valida o padrão de commits.
+7. **Swagger sempre em dia:** todo endpoint novo ou alterado é documentado em `src/config/swagger.ts`. O teste `tests/swagger.test.ts` valida o documento OpenAPI, confere que `/docs` e `/docs.json` respondem (e que `/api-docs` não existe) e **falha se alguma rota existente ficar sem documentação** ou se o Swagger citar uma rota que não existe mais.
 
 ---
 
 ## 11. Limitações conhecidas
 
-- **Swagger incompleto:** não documenta `/auth/logout` nem os endpoints de `/avaliacoes`. O exemplo de bairro usa "Pato Branco", enquanto o seed usa Cornélio Procópio.
 - **Sem testes automatizados** e sem pipeline de CI neste repositório.
 - **Sem refresh token** e sem revogação de token no logout.
 - **Frete por bairro** está modelado, mas sem API.
@@ -257,7 +257,7 @@ npm run seed
 npm run dev              # http://localhost:3000
 ```
 
-Documentação interativa: `http://localhost:3000/docs` (ou `/api-docs`; JSON em `/api-docs.json`).
+Documentação interativa: `http://localhost:3000/docs` (especificação OpenAPI em `http://localhost:3000/docs.json`).
 
 ### Produção com Docker
 O `Dockerfile` compila o TypeScript no estágio `builder` e copia apenas `dist/` e as dependências de produção para o estágio `runner`. O `entrypoint.sh` executa `migration:run` antes de iniciar `node dist/server.js`. O seed **não** roda automaticamente: execute `npm run seed` uma vez em cada ambiente novo.
