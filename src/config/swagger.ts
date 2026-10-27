@@ -427,6 +427,76 @@ export const swaggerDoc = {
 		},
 	},
 	paths: {
+		"/health": {
+			get: {
+				tags: ["Saúde"],
+				summary: "Verificar se o processo da API está no ar (liveness)",
+				description:
+					"Rota pública usada por healthchecks de contêiner. Não consulta o banco de dados.",
+				responses: {
+					200: {
+						description: "A API está no ar",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: { type: "string", example: "ok" },
+										uptime: {
+											type: "integer",
+											description: "Tempo de execução do processo, em segundos",
+											example: 3600,
+										},
+									},
+									required: ["status", "uptime"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"/ready": {
+			get: {
+				tags: ["Saúde"],
+				summary:
+					"Verificar se a API está pronta para receber tráfego (readiness)",
+				description:
+					"Rota pública usada pelo monitoramento. Executa uma consulta simples no banco de dados e responde 503 quando ele não está disponível.",
+				responses: {
+					200: {
+						description: "A API e o banco de dados estão disponíveis",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: { type: "string", example: "ready" },
+										database: { type: "string", example: "up" },
+									},
+									required: ["status", "database"],
+								},
+							},
+						},
+					},
+					503: {
+						description: "O banco de dados não está disponível",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: { type: "string", example: "unavailable" },
+										database: { type: "string", example: "down" },
+									},
+									required: ["status", "database"],
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		"/auth/register": {
 			post: {
 				tags: ["Autenticação"],
