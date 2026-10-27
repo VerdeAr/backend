@@ -302,6 +302,128 @@ export const swaggerDoc = {
 					"items",
 				],
 			},
+			IniciarChatInput: {
+				type: "object",
+				properties: {
+					seller_id: {
+						type: "string",
+						format: "uuid",
+						example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+					},
+					product_id: {
+						type: "string",
+						format: "uuid",
+						example: "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+					},
+					sale_id: {
+						type: "string",
+						format: "uuid",
+						example: "c3d4e5f6-a7b8-9012-cdef-123456789012",
+					},
+				},
+				description:
+					"Informe seller_id, product_id ou sale_id para iniciar o chat.",
+			},
+			SendMessageInput: {
+				type: "object",
+				properties: {
+					content: {
+						type: "string",
+						minLength: 1,
+						maxLength: 2000,
+						example: "Olá, o produto ainda está disponível para entrega?",
+					},
+				},
+				required: ["content"],
+			},
+			MessageResponse: {
+				type: "object",
+				properties: {
+					id: {
+						type: "string",
+						format: "uuid",
+						example: "d4e5f6a7-b8c9-0123-def4-567890123456",
+					},
+					chat_id: {
+						type: "string",
+						format: "uuid",
+						example: "e5f6a7b8-c9d0-1234-ef56-789012345678",
+					},
+					sender_id: {
+						type: "string",
+						format: "uuid",
+						example: "f6a7b8c9-d0e1-2345-f678-901234567890",
+					},
+					content: {
+						type: "string",
+						example: "Olá! Sim, temos estoque fresco hoje.",
+					},
+					is_read: { type: "boolean", example: false },
+					created_at: { type: "string", format: "date-time" },
+					updated_at: { type: "string", format: "date-time" },
+				},
+				required: [
+					"id",
+					"chat_id",
+					"sender_id",
+					"content",
+					"is_read",
+					"created_at",
+				],
+			},
+			ChatResponse: {
+				type: "object",
+				properties: {
+					id: {
+						type: "string",
+						format: "uuid",
+						example: "e5f6a7b8-c9d0-1234-ef56-789012345678",
+					},
+					customer_id: {
+						type: "string",
+						format: "uuid",
+						example: "f6a7b8c9-d0e1-2345-f678-901234567890",
+					},
+					seller_id: {
+						type: "string",
+						format: "uuid",
+						example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+					},
+					status: {
+						type: "string",
+						enum: ["ATIVO", "FINALIZADO"],
+						example: "ATIVO",
+					},
+					last_message_at: {
+						type: "string",
+						format: "date-time",
+						nullable: true,
+					},
+					created_at: { type: "string", format: "date-time" },
+					updated_at: { type: "string", format: "date-time" },
+				},
+				required: ["id", "customer_id", "seller_id", "status", "created_at"],
+			},
+			UnreadCountResponse: {
+				type: "object",
+				properties: {
+					count: { type: "integer", example: 4 },
+				},
+				required: ["count"],
+			},
+			MessagesListResponse: {
+				type: "object",
+				properties: {
+					messages: {
+						type: "array",
+						items: { $ref: "#/components/schemas/MessageResponse" },
+					},
+					total: { type: "integer", example: 12 },
+					page: { type: "integer", example: 1 },
+					limit: { type: "integer", example: 50 },
+				},
+				required: ["messages", "total", "page", "limit"],
+			},
 		},
 	},
 	paths: {
@@ -1566,6 +1688,366 @@ export const swaggerDoc = {
 					},
 					403: {
 						description: "Sem permissão para alterar este pedido",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+				},
+			},
+		},
+		"/chats": {
+			get: {
+				tags: ["Chat"],
+				summary: "Listar todas as conversas do usuário autenticado",
+				security: [{ bearerAuth: [] }],
+				responses: {
+					200: {
+						description: "Lista de chats do usuário",
+						content: {
+							"application/json": {
+								schema: {
+									type: "array",
+									items: { $ref: "#/components/schemas/ChatResponse" },
+								},
+							},
+						},
+					},
+					401: {
+						description: "Não autenticado",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+				},
+			},
+			post: {
+				tags: ["Chat"],
+				summary: "Iniciar ou obter conversa ativa entre cliente e vendedor",
+				security: [{ bearerAuth: [] }],
+				requestBody: {
+					required: true,
+					content: {
+						"application/json": {
+							schema: { $ref: "#/components/schemas/IniciarChatInput" },
+						},
+					},
+				},
+				responses: {
+					201: {
+						description: "Chat criado ou localizado",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ChatResponse" },
+							},
+						},
+					},
+					400: {
+						description: "Dados inválidos ou auto-chat",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					403: {
+						description: "Acesso negado à venda",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					404: {
+						description: "Vendedor, produto ou venda não encontrados",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+				},
+			},
+		},
+		"/chats/iniciar": {
+			post: {
+				tags: ["Chat"],
+				summary: "Iniciar ou obter conversa ativa (compatibilidade Jira)",
+				security: [{ bearerAuth: [] }],
+				requestBody: {
+					required: true,
+					content: {
+						"application/json": {
+							schema: { $ref: "#/components/schemas/IniciarChatInput" },
+						},
+					},
+				},
+				responses: {
+					201: {
+						description: "Chat criado ou localizado",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ChatResponse" },
+							},
+						},
+					},
+					400: {
+						description: "Dados inválidos ou auto-chat",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+				},
+			},
+		},
+		"/chats/nao-lidas/count": {
+			get: {
+				tags: ["Chat"],
+				summary: "Contagem de mensagens não lidas do usuário autenticado",
+				security: [{ bearerAuth: [] }],
+				parameters: [
+					{
+						name: "chat_id",
+						in: "query",
+						required: false,
+						schema: { type: "string", format: "uuid" },
+						description:
+							"ID do chat específico. Se omitido, retorna a soma de todos os chats.",
+					},
+				],
+				responses: {
+					200: {
+						description: "Contagem de mensagens não lidas",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/UnreadCountResponse" },
+							},
+						},
+					},
+					401: {
+						description: "Não autenticado",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+				},
+			},
+		},
+		"/chats/{id}": {
+			get: {
+				tags: ["Chat"],
+				summary: "Obter detalhes de uma conversa",
+				security: [{ bearerAuth: [] }],
+				parameters: [
+					{
+						name: "id",
+						in: "path",
+						required: true,
+						schema: { type: "string", format: "uuid" },
+					},
+				],
+				responses: {
+					200: {
+						description: "Detalhes do chat",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ChatResponse" },
+							},
+						},
+					},
+					403: {
+						description: "Usuário não é participante da conversa",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					404: {
+						description: "Chat não encontrado",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+				},
+			},
+		},
+		"/chats/{id}/messages": {
+			get: {
+				tags: ["Chat"],
+				summary: "Listar mensagens de uma conversa com paginação",
+				security: [{ bearerAuth: [] }],
+				parameters: [
+					{
+						name: "id",
+						in: "path",
+						required: true,
+						schema: { type: "string", format: "uuid" },
+					},
+					{
+						name: "page",
+						in: "query",
+						required: false,
+						schema: { type: "integer", default: 1 },
+					},
+					{
+						name: "limit",
+						in: "query",
+						required: false,
+						schema: { type: "integer", default: 50 },
+					},
+					{
+						name: "order",
+						in: "query",
+						required: false,
+						schema: {
+							type: "string",
+							enum: ["ASC", "DESC"],
+							default: "DESC",
+						},
+					},
+				],
+				responses: {
+					200: {
+						description: "Histórico de mensagens",
+						content: {
+							"application/json": {
+								schema: {
+									$ref: "#/components/schemas/MessagesListResponse",
+								},
+							},
+						},
+					},
+					403: {
+						description: "Usuário não é participante da conversa",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+				},
+			},
+			post: {
+				tags: ["Chat"],
+				summary: "Enviar mensagem via REST",
+				security: [{ bearerAuth: [] }],
+				parameters: [
+					{
+						name: "id",
+						in: "path",
+						required: true,
+						schema: { type: "string", format: "uuid" },
+					},
+				],
+				requestBody: {
+					required: true,
+					content: {
+						"application/json": {
+							schema: { $ref: "#/components/schemas/SendMessageInput" },
+						},
+					},
+				},
+				responses: {
+					201: {
+						description: "Mensagem enviada com sucesso",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/MessageResponse" },
+							},
+						},
+					},
+					400: {
+						description: "Mensagem vazia ou chat finalizado",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					403: {
+						description: "Usuário não participa da conversa",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+				},
+			},
+		},
+		"/chats/{id}/read": {
+			patch: {
+				tags: ["Chat"],
+				summary: "Marcar mensagens da conversa como lidas",
+				security: [{ bearerAuth: [] }],
+				parameters: [
+					{
+						name: "id",
+						in: "path",
+						required: true,
+						schema: { type: "string", format: "uuid" },
+					},
+				],
+				responses: {
+					200: {
+						description: "Mensagens marcadas como lidas",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										success: { type: "boolean", example: true },
+										count: { type: "integer", example: 3 },
+									},
+								},
+							},
+						},
+					},
+					403: {
+						description: "Usuário não participa da conversa",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+				},
+			},
+		},
+		"/chats/{id}/finish": {
+			patch: {
+				tags: ["Chat"],
+				summary: "Encerrar conversa (altera status para FINALIZADO)",
+				security: [{ bearerAuth: [] }],
+				parameters: [
+					{
+						name: "id",
+						in: "path",
+						required: true,
+						schema: { type: "string", format: "uuid" },
+					},
+				],
+				responses: {
+					200: {
+						description: "Chat encerrado com sucesso",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ChatResponse" },
+							},
+						},
+					},
+					403: {
+						description: "Usuário não participa da conversa",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
