@@ -29,6 +29,22 @@ describe("documentação Swagger", () => {
 		expect(response.type).toBe("text/html");
 	});
 
+	it("serve a especificação OpenAPI em /docs.json", async () => {
+		const response = await request(app).get("/docs.json");
+
+		expect(response.status).toBe(200);
+		expect(response.body.openapi).toBe("3.0.0");
+		expect(Object.keys(response.body.paths).length).toBeGreaterThan(0);
+	});
+
+	it("mantém uma única rota de documentação (sem /api-docs)", async () => {
+		const ui = await request(app).get("/api-docs/");
+		const json = await request(app).get("/api-docs.json");
+
+		expect(ui.status).toBe(404);
+		expect(json.status).toBe(404);
+	});
+
 	it("não documenta rotas que não existem mais", () => {
 		const real = new Set(collectApiRoutes());
 		const documented = collectDocumentedRoutes(swaggerDoc.paths);

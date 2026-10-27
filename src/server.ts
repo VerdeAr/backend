@@ -16,9 +16,7 @@ AppDataSource.initialize()
 	.then(() => {
 		app.listen(PORT, () => {
 			console.log(`Servidor rodando em: http://localhost:${PORT}`);
-			console.log(
-				`Documentação Swagger em: http://localhost:${PORT}/docs ou http://localhost:${PORT}/api-docs`,
-			);
+			console.log(`Documentação Swagger em: http://localhost:${PORT}/docs`);
 		});
 	})
 	.catch((err) => {
