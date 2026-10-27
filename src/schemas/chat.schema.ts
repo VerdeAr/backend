@@ -36,3 +36,27 @@ export const listMessagesQuerySchema = z.object({
 });
 
 export type ListMessagesQuery = z.infer<typeof listMessagesQuerySchema>;
+
+export const socketChatIdSchema = z.object({
+	chat_id: z.string().uuid("ID de chat inválido."),
+});
+
+export type SocketChatIdInput = z.infer<typeof socketChatIdSchema>;
+
+export const socketSendMessageSchema = z.object({
+	chat_id: z.string().uuid("ID de chat inválido."),
+	content: z
+		.string()
+		.trim()
+		.min(1, "O conteúdo da mensagem não pode ser vazio.")
+		.max(2000, "A mensagem não pode exceder 2000 caracteres."),
+});
+
+export type SocketSendMessageInput = z.infer<typeof socketSendMessageSchema>;
+
+export const socketTypingSchema = z.object({
+	chat_id: z.string().uuid("ID de chat inválido."),
+	is_typing: z.boolean().default(false),
+});
+
+export type SocketTypingInput = z.infer<typeof socketTypingSchema>;

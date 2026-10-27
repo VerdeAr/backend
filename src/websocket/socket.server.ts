@@ -3,7 +3,14 @@ import process from "node:process";
 import { parseCookie } from "cookie";
 import jwt from "jsonwebtoken";
 import { type Socket, Server as SocketIOServer } from "socket.io";
+import { ZodError } from "zod";
 import type { UserRole } from "@/entities/enums";
+import { AppError } from "@/errors/AppError";
+import {
+	socketChatIdSchema,
+	socketSendMessageSchema,
+	socketTypingSchema,
+} from "@/schemas/chat.schema";
 import { chatService } from "@/services/chat.service";
 
 export interface AuthenticatedUser {
@@ -19,8 +26,13 @@ export interface CustomSocket extends Socket {
 
 let ioInstance: SocketIOServer | null = null;
 
-function getErrorMessage(error: unknown, fallback: string): string {
-	if (error instanceof Error) return error.message;
+function getSocketErrorMessage(error: unknown, fallback: string): string {
+	if (error instanceof AppError) {
+		return error.message;
+	}
+	if (error instanceof ZodError) {
+		return error.issues[0]?.message || "Dados inválidos.";
+	}
 	return fallback;
 }
 
@@ -70,7 +82,12 @@ export function initSocketServer(httpServer: http.Server): SocketIOServer {
 		}
 
 		try {
-			const secret = process.env.JWT_SECRET || "verdear-secret-key-2026";
+			const secret = process.env.JWT_SECRET;
+			if (!secret) {
+				return next(
+					new Error("Não autorizado: segredo JWT não configurado no servidor."),
+				);
+			}
 			const decoded = jwt.verify(token, secret) as {
 				id: string;
 				role: UserRole;
@@ -99,7 +116,7 @@ export function initSocketServer(httpServer: http.Server): SocketIOServer {
 		socket.on(
 			"join_chat",
 			async (
-				data: { chat_id: string },
+				data: unknown,
 				callback?: (res: {
 					success: boolean;
 					error?: string;
@@ -107,30 +124,29 @@ export function initSocketServer(httpServer: http.Server): SocketIOServer {
 				}) => void,
 			) => {
 				try {
-					const chatId = String(data?.chat_id);
-					if (!chatId) {
-						callback?.({ success: false, error: "ID de chat inválido." });
-						return;
-					}
+					const { chat_id } = socketChatIdSchema.parse(data);
 
-					await chatService.validarParticipante(chatId, user.userId);
-					const room = `chat:${chatId}`;
+					await chatService.validarParticipante(chat_id, user.userId);
+					const room = `chat:${chat_id}`;
 					socket.join(room);
 					callback?.({ success: true, room });
 				} catch (error: unknown) {
 					callback?.({
 						success: false,
-						error: getErrorMessage(error, "Erro ao entrar na sala do chat."),
+						error: getSocketErrorMessage(
+							error,
+							"Erro ao entrar na sala do chat.",
+						),
 					});
 				}
 			},
 		);
 
 		// Evento: Sair da sala do chat
-		socket.on("leave_chat", (data: { chat_id: string }) => {
-			const chatId = String(data?.chat_id);
-			if (chatId) {
-				socket.leave(`chat:${chatId}`);
+		socket.on("leave_chat", (data: unknown) => {
+			const parsed = socketChatIdSchema.safeParse(data);
+			if (parsed.success) {
+				socket.leave(`chat:${parsed.data.chat_id}`);
 			}
 		});
 
@@ -138,7 +154,7 @@ export function initSocketServer(httpServer: http.Server): SocketIOServer {
 		socket.on(
 			"send_message",
 			async (
-				data: { chat_id: string; content: string },
+				data: unknown,
 				callback?: (res: {
 					success: boolean;
 					error?: string;
@@ -146,16 +162,10 @@ export function initSocketServer(httpServer: http.Server): SocketIOServer {
 				}) => void,
 			) => {
 				try {
-					const chatId = String(data?.chat_id);
-					const content = String(data?.content ?? "");
-
-					if (!chatId) {
-						callback?.({ success: false, error: "ID de chat inválido." });
-						return;
-					}
+					const { chat_id, content } = socketSendMessageSchema.parse(data);
 
 					const saved = await chatService.salvarMensagem(
-						chatId,
+						chat_id,
 						user.userId,
 						content,
 					);
@@ -171,38 +181,40 @@ export function initSocketServer(httpServer: http.Server): SocketIOServer {
 					};
 
 					// Notifica todos na sala do chat
-					io.to(`chat:${chatId}`).emit("new_message", payload);
+					io.to(`chat:${chat_id}`).emit("new_message", payload);
 
 					callback?.({ success: true, message: payload });
 				} catch (error: unknown) {
 					callback?.({
 						success: false,
-						error: getErrorMessage(error, "Erro ao enviar mensagem."),
+						error: getSocketErrorMessage(error, "Erro ao enviar mensagem."),
 					});
 				}
 			},
 		);
 
-		// Evento: Indicador de digitação
-		socket.on(
-			"typing_indicator",
-			(data: { chat_id: string; is_typing: boolean }) => {
-				const chatId = String(data?.chat_id);
-				if (chatId) {
-					socket.to(`chat:${chatId}`).emit("user_typing", {
-						chat_id: chatId,
-						userId: user.userId,
-						is_typing: Boolean(data.is_typing),
-					});
-				}
-			},
-		);
+		// Evento: Indicador de digitação (valida se o socket está na sala)
+		socket.on("typing_indicator", (data: unknown) => {
+			const parsed = socketTypingSchema.safeParse(data);
+			if (!parsed.success) return;
+
+			const room = `chat:${parsed.data.chat_id}`;
+			if (!socket.rooms.has(room)) {
+				return;
+			}
+
+			socket.to(room).emit("user_typing", {
+				chat_id: parsed.data.chat_id,
+				userId: user.userId,
+				is_typing: parsed.data.is_typing,
+			});
+		});
 
 		// Evento: Leitura de mensagens
 		socket.on(
 			"message_read",
 			async (
-				data: { chat_id: string },
+				data: unknown,
 				callback?: (res: {
 					success: boolean;
 					count?: number;
@@ -210,23 +222,22 @@ export function initSocketServer(httpServer: http.Server): SocketIOServer {
 				}) => void,
 			) => {
 				try {
-					const chatId = String(data?.chat_id);
-					if (chatId) {
-						const count = await chatService.marcarMensagensLidas(
-							chatId,
-							user.userId,
-						);
-						socket.to(`chat:${chatId}`).emit("messages_read", {
-							chat_id: chatId,
-							readBy: user.userId,
-							count,
-						});
-						callback?.({ success: true, count });
-					}
+					const { chat_id } = socketChatIdSchema.parse(data);
+
+					const count = await chatService.marcarMensagensLidas(
+						chat_id,
+						user.userId,
+					);
+					socket.to(`chat:${chat_id}`).emit("messages_read", {
+						chat_id,
+						readBy: user.userId,
+						count,
+					});
+					callback?.({ success: true, count });
 				} catch (error: unknown) {
 					callback?.({
 						success: false,
-						error: getErrorMessage(
+						error: getSocketErrorMessage(
 							error,
 							"Erro ao marcar mensagens como lidas.",
 						),
