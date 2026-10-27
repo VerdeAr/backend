@@ -2,6 +2,7 @@ import { Router } from "express";
 import { authRoutes } from "./auth.routes";
 import { cartRoutes } from "./cart.routes";
 import { categoryRoutes } from "./category.routes";
+import { healthRoutes } from "./health.routes";
 import { measurementUnitRoutes } from "./measurement-unit.routes";
 import { neighborhoodRoutes } from "./neighborhood.routes";
 import { personRoutes } from "./person.routes";
@@ -13,6 +14,7 @@ import { sellerProductRoutes } from "./seller-product.routes";
 
 const router = Router();
 
+router.use(healthRoutes);
 router.use("/auth", authRoutes);
 router.use("/pessoa", personRoutes);
 router.use("/bairros", neighborhoodRoutes);
