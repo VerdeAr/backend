@@ -5,5 +5,9 @@ dist
 !.env.example
 .agents
 docs
+tests
+vitest.config.mts
+tsconfig.test.json
+docker-compose.test.yml
 *.log
 npm-debug.log*
