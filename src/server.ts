@@ -1,20 +1,25 @@
+import http from "node:http";
 import process from "node:process";
 import { app } from "@/app.js";
 import { AppDataSource } from "@/config/database.js";
+import { initSocketServer } from "@/websocket/socket.server.js";
 
-const PORT = Number(process.env.PORT);
+const PORT = Number(process.env.PORT) || 3000;
+const httpServer = http.createServer(app);
+initSocketServer(httpServer);
 
-// Falha cedo quando a porta não foi configurada, em vez de escutar em uma porta aleatória
+// Sem PORT definida a API usa 3000; uma porta configurada de forma inválida (negativa ou
+// fracionada) falha cedo, em vez de escutar em uma porta inesperada
 if (!Number.isInteger(PORT) || PORT <= 0) {
 	console.error(
-		"Variável de ambiente PORT ausente ou inválida. Defina um número inteiro positivo.",
+		"Variável de ambiente PORT inválida. Defina um número inteiro positivo.",
 	);
 	process.exit(1);
 }
 
 AppDataSource.initialize()
 	.then(() => {
-		app.listen(PORT, () => {
+		httpServer.listen(PORT, () => {
 			console.log(`Servidor rodando em: http://localhost:${PORT}`);
 			console.log(`Documentação Swagger em: http://localhost:${PORT}/docs`);
 		});
