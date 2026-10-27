@@ -1,3 +1,50 @@
+// Parâmetro de caminho "id" (UUID) reutilizado pelas rotas com recurso identificado
+const idPathParameter = {
+	name: "id",
+	in: "path",
+	required: true,
+	schema: { type: "string", format: "uuid" },
+};
+
+// Cabeçalho devolvido por login e cadastro, que autenticam o usuário pelo cookie
+const authCookieHeader = {
+	"Set-Cookie": {
+		description: "Cookie HttpOnly `token` com o JWT (7 dias, SameSite=Lax)",
+		schema: {
+			type: "string",
+			example: "token=<jwt>; Max-Age=604800; Path=/; HttpOnly; SameSite=Lax",
+		},
+	},
+};
+
+// Campos de cadastro e de edição de produto (a edição aceita qualquer subconjunto)
+const productInputProperties = {
+	name: {
+		type: "string",
+		minLength: 2,
+		maxLength: 255,
+		example: "Alface Crespa",
+	},
+	price: {
+		type: "number",
+		exclusiveMinimum: true,
+		minimum: 0,
+		description: "Preço unitário maior que zero",
+		example: 4.5,
+	},
+	stock: {
+		type: "number",
+		minimum: 0,
+		description: "Estoque disponível (aceita frações)",
+		example: 50,
+	},
+	category_id: { type: "string", format: "uuid", nullable: true },
+	measurement_unit_id: { type: "string", format: "uuid", nullable: true },
+	description: { type: "string", maxLength: 2000, nullable: true },
+	image_url: { type: "string", format: "uri", nullable: true },
+	is_active: { type: "boolean", default: true },
+};
+
 // Autenticação aceita pelas rotas protegidas: o cookie HttpOnly "token" (definido no login
 // e no cadastro) ou o cabeçalho Authorization: Bearer <token>
 const authenticated = [{ cookieAuth: [] }, { bearerAuth: [] }];
@@ -402,6 +449,37 @@ export const swaggerDoc = {
 					},
 				],
 			},
+			AuthResponse: {
+				type: "object",
+				properties: {
+					token: {
+						type: "string",
+						description: "JWT, também gravado no cookie `token`",
+					},
+					user: { $ref: "#/components/schemas/UserResponse" },
+				},
+				required: ["token", "user"],
+			},
+			SuccessMessage: {
+				type: "object",
+				properties: {
+					success: { type: "boolean", example: true },
+					message: {
+						type: "string",
+						example: "Operação realizada com sucesso!",
+					},
+				},
+				required: ["success", "message"],
+			},
+			ProductInput: {
+				type: "object",
+				properties: productInputProperties,
+				required: ["name", "price", "stock"],
+			},
+			ProductUpdateInput: {
+				type: "object",
+				properties: productInputProperties,
+			},
 			CartItem: {
 				type: "object",
 				properties: {
@@ -577,6 +655,10 @@ export const swaggerDoc = {
 			post: {
 				tags: ["Autenticação"],
 				summary: "Cadastrar novo usuário (Cliente ou Vendedor Rural)",
+				description:
+					"Cria o usuário e já o autentica: o JWT é devolvido no corpo e gravado no cookie HttpOnly `token`. " +
+					"Para `role: VENDEDOR` o perfil de produtor (`seller`) é criado junto, com frete fixo inicial de 0.00. " +
+					"CPF e CNPJ aceitam máscara; apenas os dígitos são considerados e armazenados.",
 				requestBody: {
 					required: true,
 					content: {
@@ -600,7 +682,12 @@ export const swaggerDoc = {
 										minLength: 6,
 										example: "segredo123",
 									},
-									cpf: { type: "string", example: "12345678901" },
+									cpf: {
+										type: "string",
+										minLength: 11,
+										description: "CPF válido, com ou sem máscara",
+										example: "12345678901",
+									},
 									role: {
 										type: "string",
 										enum: ["CLIENTE", "VENDEDOR"],
@@ -608,11 +695,13 @@ export const swaggerDoc = {
 									},
 									phone: {
 										type: "string",
+										maxLength: 20,
 										nullable: true,
 										example: "46999990000",
 									},
 									address: {
 										type: "string",
+										maxLength: 255,
 										nullable: true,
 										example: "Estrada Rural, Km 10",
 									},
@@ -623,17 +712,23 @@ export const swaggerDoc = {
 									},
 									description: {
 										type: "string",
+										maxLength: 500,
 										nullable: true,
+										description: "Apenas para vendedores",
 										example: "Hortaliças frescas agroecológicas",
 									},
 									cnpj: {
 										type: "string",
 										nullable: true,
+										description:
+											"Apenas para vendedores. CNPJ numérico válido, com ou sem máscara",
 										example: "12345678000195",
 									},
 									farm_name: {
 										type: "string",
+										maxLength: 150,
 										nullable: true,
+										description: "Apenas para vendedores",
 										example: "Recanto Verde",
 									},
 								},
@@ -644,27 +739,15 @@ export const swaggerDoc = {
 				},
 				responses: {
 					201: {
-						description: "Usuário cadastrado com sucesso",
+						description: "Usuário cadastrado e autenticado",
+						headers: authCookieHeader,
 						content: {
 							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										token: { type: "string" },
-										user: { $ref: "#/components/schemas/UserResponse" },
-									},
-								},
+								schema: { $ref: "#/components/schemas/AuthResponse" },
 							},
 						},
 					},
-					400: {
-						description: "Dados de validação inválidos",
-						content: {
-							"application/json": {
-								schema: { $ref: "#/components/schemas/ErrorResponse" },
-							},
-						},
-					},
+					400: { $ref: "#/components/responses/ValidationError" },
 					409: {
 						description: "E-mail, CPF ou CNPJ já cadastrado",
 						content: {
@@ -679,7 +762,9 @@ export const swaggerDoc = {
 		"/auth/login": {
 			post: {
 				tags: ["Autenticação"],
-				summary: "Autenticar usuário e gerar token JWT",
+				summary: "Autenticar usuário e gerar o token JWT",
+				description:
+					"Valida as credenciais, devolve o JWT no corpo e o grava no cookie HttpOnly `token` (7 dias).",
 				requestBody: {
 					required: true,
 					content: {
@@ -702,26 +787,14 @@ export const swaggerDoc = {
 				responses: {
 					200: {
 						description: "Autenticado com sucesso",
+						headers: authCookieHeader,
 						content: {
 							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										token: { type: "string" },
-										user: { $ref: "#/components/schemas/UserResponse" },
-									},
-								},
+								schema: { $ref: "#/components/schemas/AuthResponse" },
 							},
 						},
 					},
-					400: {
-						description: "Dados de login inválidos",
-						content: {
-							"application/json": {
-								schema: { $ref: "#/components/schemas/ErrorResponse" },
-							},
-						},
-					},
+					400: { $ref: "#/components/responses/ValidationError" },
 					401: {
 						description: "Credenciais inválidas",
 						content: {
@@ -736,7 +809,7 @@ export const swaggerDoc = {
 		"/auth/me": {
 			get: {
 				tags: ["Autenticação"],
-				summary: "Obter perfil do usuário autenticado",
+				summary: "Obter o perfil do usuário autenticado",
 				security: authenticated,
 				responses: {
 					200: {
@@ -747,14 +820,8 @@ export const swaggerDoc = {
 							},
 						},
 					},
-					401: {
-						description: "Não autenticado",
-						content: {
-							"application/json": {
-								schema: { $ref: "#/components/schemas/ErrorResponse" },
-							},
-						},
-					},
+					401: { $ref: "#/components/responses/Unauthorized" },
+					404: { $ref: "#/components/responses/NotFound" },
 				},
 			},
 		},
@@ -762,6 +829,9 @@ export const swaggerDoc = {
 			put: {
 				tags: ["Pessoa e Perfil"],
 				summary: "Atualizar dados de perfil do usuário ou vendedor",
+				description:
+					"Todos os campos são opcionais. O e-mail, o CPF e o papel não podem ser alterados. " +
+					"`description` e `farm_name` só têm efeito para vendedores.",
 				security: authenticated,
 				requestBody: {
 					required: true,
@@ -771,8 +841,8 @@ export const swaggerDoc = {
 								type: "object",
 								properties: {
 									name: { type: "string", minLength: 2, maxLength: 100 },
-									phone: { type: "string", nullable: true },
-									address: { type: "string", nullable: true },
+									phone: { type: "string", maxLength: 20, nullable: true },
+									address: { type: "string", maxLength: 255, nullable: true },
 									neighborhood_id: {
 										type: "string",
 										format: "uuid",
@@ -796,34 +866,29 @@ export const swaggerDoc = {
 							"application/json": {
 								schema: {
 									type: "object",
-									properties: { success: { type: "boolean" } },
+									properties: {
+										success: { type: "boolean", example: true },
+										message: {
+											type: "string",
+											example: "Cadastro atualizado com sucesso!",
+										},
+										user: { $ref: "#/components/schemas/UserResponse" },
+									},
+									required: ["success", "message", "user"],
 								},
 							},
 						},
 					},
-					400: {
-						description: "Dados inválidos",
-						content: {
-							"application/json": {
-								schema: { $ref: "#/components/schemas/ErrorResponse" },
-							},
-						},
-					},
-					401: {
-						description: "Não autenticado",
-						content: {
-							"application/json": {
-								schema: { $ref: "#/components/schemas/ErrorResponse" },
-							},
-						},
-					},
+					400: { $ref: "#/components/responses/ValidationError" },
+					401: { $ref: "#/components/responses/Unauthorized" },
+					404: { $ref: "#/components/responses/NotFound" },
 				},
 			},
 		},
 		"/pessoa/senha": {
 			put: {
 				tags: ["Pessoa e Perfil"],
-				summary: "Atualizar senha do usuário autenticado",
+				summary: "Atualizar a senha do usuário autenticado",
 				security: authenticated,
 				requestBody: {
 					required: true,
@@ -834,7 +899,11 @@ export const swaggerDoc = {
 								properties: {
 									current_password: { type: "string" },
 									new_password: { type: "string", minLength: 6 },
-									confirm_password: { type: "string", minLength: 6 },
+									confirm_password: {
+										type: "string",
+										minLength: 6,
+										description: "Deve ser igual a `new_password`",
+									},
 								},
 								required: [
 									"current_password",
@@ -846,30 +915,34 @@ export const swaggerDoc = {
 					},
 				},
 				responses: {
-					200: { description: "Senha alterada com sucesso" },
+					200: {
+						description: "Senha alterada com sucesso",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/SuccessMessage" },
+							},
+						},
+					},
 					400: {
-						description: "Senha atual incorreta ou confirmação incompatível",
+						description:
+							"Dados inválidos, confirmação diferente da nova senha ou senha atual incorreta",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
 							},
 						},
 					},
-					401: {
-						description: "Não autenticado",
-						content: {
-							"application/json": {
-								schema: { $ref: "#/components/schemas/ErrorResponse" },
-							},
-						},
-					},
+					401: { $ref: "#/components/responses/Unauthorized" },
+					404: { $ref: "#/components/responses/NotFound" },
 				},
 			},
 		},
 		"/pessoa/frete": {
 			put: {
 				tags: ["Pessoa e Perfil"],
-				summary: "Configurar taxa de frete fixo do vendedor",
+				summary: "Configurar a taxa de frete fixo do vendedor",
+				description:
+					"O frete fixo é somado ao total quando o cliente escolhe a modalidade ENTREGA.",
 				security: authenticated,
 				requestBody: {
 					required: true,
@@ -878,7 +951,11 @@ export const swaggerDoc = {
 							schema: {
 								type: "object",
 								properties: {
-									fixed_shipping_rate: { type: "number", minimum: 0 },
+									fixed_shipping_rate: {
+										type: "number",
+										minimum: 0,
+										example: 12.5,
+									},
 								},
 								required: ["fixed_shipping_rate"],
 							},
@@ -886,38 +963,36 @@ export const swaggerDoc = {
 					},
 				},
 				responses: {
-					200: { description: "Taxa de frete atualizada com sucesso" },
-					400: {
-						description: "Valor de frete inválido",
+					200: {
+						description: "Taxa de frete atualizada com sucesso",
 						content: {
 							"application/json": {
-								schema: { $ref: "#/components/schemas/ErrorResponse" },
+								schema: {
+									type: "object",
+									properties: {
+										success: { type: "boolean", example: true },
+										message: {
+											type: "string",
+											example: "Frete atualizado com sucesso!",
+										},
+										fixed_shipping_rate: { type: "number", example: 12.5 },
+									},
+									required: ["success", "message", "fixed_shipping_rate"],
+								},
 							},
 						},
 					},
-					401: {
-						description: "Não autenticado",
-						content: {
-							"application/json": {
-								schema: { $ref: "#/components/schemas/ErrorResponse" },
-							},
-						},
-					},
-					403: {
-						description: "Acesso restrito a vendedores",
-						content: {
-							"application/json": {
-								schema: { $ref: "#/components/schemas/ErrorResponse" },
-							},
-						},
-					},
+					400: { $ref: "#/components/responses/ValidationError" },
+					401: { $ref: "#/components/responses/Unauthorized" },
+					403: { $ref: "#/components/responses/Forbidden" },
+					404: { $ref: "#/components/responses/NotFound" },
 				},
 			},
 		},
 		"/bairros": {
 			get: {
 				tags: ["Bairros"],
-				summary: "Listar bairros ordenados para cadastro/endereçamento",
+				summary: "Listar bairros ordenados para cadastro e endereçamento",
 				responses: {
 					200: {
 						description: "Lista de bairros retornada com sucesso",
@@ -937,52 +1012,66 @@ export const swaggerDoc = {
 			get: {
 				tags: ["Produtos (Público)"],
 				summary: "Listar produtos públicos com filtros, busca e paginação",
+				description:
+					"Por padrão lista apenas produtos ativos e com estoque (`disponivel=true`). " +
+					"Os parâmetros `categoriaId`/`category_id`, `vendedorId`/`seller_id` e `termo`/`search`/`q` são sinônimos.",
 				parameters: [
 					{
-						name: "search",
+						name: "termo",
 						in: "query",
 						schema: { type: "string" },
-						description: "Termo de busca por nome ou descrição",
+						description:
+							"Busca parcial por nome ou descrição, sem diferenciar maiúsculas. Sinônimos: `search` e `q`",
 					},
 					{
 						name: "categoriaId",
 						in: "query",
 						schema: { type: "string", format: "uuid" },
-						description: "Filtrar por categoria",
+						description: "Filtrar por categoria. Sinônimo: `category_id`",
 					},
 					{
 						name: "vendedorId",
 						in: "query",
 						schema: { type: "string", format: "uuid" },
-						description: "Filtrar por vendedor",
+						description: "Filtrar por vendedor. Sinônimo: `seller_id`",
 					},
 					{
 						name: "disponivel",
 						in: "query",
-						schema: { type: "boolean" },
-						description: "Filtrar por estoque disponível",
+						schema: { type: "boolean", default: true },
+						description:
+							"Somente produtos ativos e com estoque. Aceita true, false, 1 ou 0",
 					},
 					{
 						name: "page",
 						in: "query",
-						schema: { type: "integer", default: 1 },
+						schema: { type: "integer", minimum: 1, default: 1 },
 						description: "Número da página",
 					},
 					{
 						name: "limit",
 						in: "query",
-						schema: { type: "integer", default: 12 },
+						schema: { type: "integer", minimum: 1, default: 12 },
 						description: "Itens por página",
 					},
 					{
 						name: "orderBy",
 						in: "query",
-						schema: { type: "string", enum: ["name", "price", "created_at"] },
+						schema: {
+							type: "string",
+							enum: ["name", "price", "created_at"],
+							default: "created_at",
+						},
 					},
 					{
 						name: "orderDir",
 						in: "query",
-						schema: { type: "string", enum: ["ASC", "DESC"] },
+						schema: {
+							type: "string",
+							enum: ["ASC", "DESC"],
+							default: "DESC",
+						},
+						description: "Também aceita minúsculas",
 					},
 				],
 				responses: {
@@ -995,43 +1084,42 @@ export const swaggerDoc = {
 									properties: {
 										data: {
 											type: "array",
-											items: { $ref: "#/components/schemas/Product" },
+											items: { $ref: "#/components/schemas/PublicProduct" },
 										},
 										total: { type: "integer", example: 42 },
 										page: { type: "integer", example: 1 },
 										limit: { type: "integer", example: 12 },
 										totalPages: { type: "integer", example: 4 },
 									},
+									required: ["data", "total", "page", "limit", "totalPages"],
 								},
 							},
 						},
 					},
+					400: { $ref: "#/components/responses/ValidationError" },
 				},
 			},
 		},
 		"/produtos/{id}": {
 			get: {
 				tags: ["Produtos (Público)"],
-				summary: "Obter detalhes de um produto público por ID",
-				parameters: [
-					{
-						name: "id",
-						in: "path",
-						required: true,
-						schema: { type: "string", format: "uuid" },
-					},
-				],
+				summary: "Obter o detalhe de um produto público por ID",
+				description:
+					"Inclui a média e a quantidade de avaliações do produto. Produtos inativos ou sem estoque respondem 404.",
+				parameters: [idPathParameter],
 				responses: {
 					200: {
-						description: "Detalhes do produto retornados com sucesso",
+						description: "Detalhe do produto retornado com sucesso",
 						content: {
 							"application/json": {
-								schema: { $ref: "#/components/schemas/Product" },
+								schema: { $ref: "#/components/schemas/ProductDetail" },
 							},
 						},
 					},
+					400: { $ref: "#/components/responses/ValidationError" },
 					404: {
-						description: "Produto não encontrado ou indisponível",
+						description:
+							"Produto não encontrado, inativo ou sem estoque disponível",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
@@ -1044,7 +1132,7 @@ export const swaggerDoc = {
 		"/categorias": {
 			get: {
 				tags: ["Categorias"],
-				summary: "Listar categorias agrícolas cadastradas",
+				summary: "Listar as categorias de produtos",
 				responses: {
 					200: {
 						description: "Lista de categorias retornada com sucesso",
@@ -1063,7 +1151,7 @@ export const swaggerDoc = {
 		"/unidades-medida": {
 			get: {
 				tags: ["Unidades de Medida"],
-				summary: "Listar unidades de medida cadastradas",
+				summary: "Listar as unidades de medida",
 				responses: {
 					200: {
 						description: "Lista de unidades de medida retornada com sucesso",
@@ -1082,7 +1170,9 @@ export const swaggerDoc = {
 		"/vendedor/produtos": {
 			get: {
 				tags: ["Vendedor - Produtos"],
-				summary: "Listar todos os produtos do produtor rural logado",
+				summary: "Listar todos os produtos do produtor logado",
+				description:
+					"Inclui produtos ativos e inativos, do mais recente para o mais antigo.",
 				security: authenticated,
 				responses: {
 					200: {
@@ -1096,58 +1186,20 @@ export const swaggerDoc = {
 							},
 						},
 					},
-					401: {
-						description: "Não autenticado",
-						content: {
-							"application/json": {
-								schema: { $ref: "#/components/schemas/ErrorResponse" },
-							},
-						},
-					},
-					403: {
-						description: "Acesso negado: permissão restrita a vendedores",
-						content: {
-							"application/json": {
-								schema: { $ref: "#/components/schemas/ErrorResponse" },
-							},
-						},
-					},
+					401: { $ref: "#/components/responses/Unauthorized" },
+					403: { $ref: "#/components/responses/Forbidden" },
+					404: { $ref: "#/components/responses/NotFound" },
 				},
 			},
 			post: {
 				tags: ["Vendedor - Produtos"],
-				summary: "Cadastrar novo produto agrícola para venda",
+				summary: "Cadastrar um novo produto para venda",
 				security: authenticated,
 				requestBody: {
 					required: true,
 					content: {
 						"application/json": {
-							schema: {
-								type: "object",
-								properties: {
-									name: { type: "string", minLength: 2, maxLength: 255 },
-									price: { type: "number", minimum: 0.01 },
-									stock: { type: "number", minimum: 0 },
-									category_id: {
-										type: "string",
-										format: "uuid",
-										nullable: true,
-									},
-									measurement_unit_id: {
-										type: "string",
-										format: "uuid",
-										nullable: true,
-									},
-									description: {
-										type: "string",
-										maxLength: 2000,
-										nullable: true,
-									},
-									image_url: { type: "string", format: "uri", nullable: true },
-									is_active: { type: "boolean", default: true },
-								},
-								required: ["name", "price", "stock"],
-							},
+							schema: { $ref: "#/components/schemas/ProductInput" },
 						},
 					},
 				},
@@ -1156,20 +1208,16 @@ export const swaggerDoc = {
 						description: "Produto cadastrado com sucesso",
 						content: {
 							"application/json": {
-								schema: { $ref: "#/components/schemas/Product" },
+								schema: { $ref: "#/components/schemas/PublicProduct" },
 							},
 						},
 					},
-					400: {
-						description: "Dados de produto inválidos",
-						content: {
-							"application/json": {
-								schema: { $ref: "#/components/schemas/ErrorResponse" },
-							},
-						},
-					},
-					403: {
-						description: "Acesso negado: permissão restrita a vendedores",
+					400: { $ref: "#/components/responses/ValidationError" },
+					401: { $ref: "#/components/responses/Unauthorized" },
+					403: { $ref: "#/components/responses/Forbidden" },
+					404: {
+						description:
+							"Perfil de produtor, categoria ou unidade de medida não encontrados",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
@@ -1183,44 +1231,15 @@ export const swaggerDoc = {
 			put: {
 				tags: ["Vendedor - Produtos"],
 				summary: "Atualizar dados e estoque de um produto do produtor",
+				description:
+					"Todos os campos são opcionais; apenas os enviados são alterados.",
 				security: authenticated,
-				parameters: [
-					{
-						name: "id",
-						in: "path",
-						required: true,
-						schema: { type: "string", format: "uuid" },
-					},
-				],
+				parameters: [idPathParameter],
 				requestBody: {
 					required: true,
 					content: {
 						"application/json": {
-							schema: {
-								type: "object",
-								properties: {
-									name: { type: "string", minLength: 2, maxLength: 255 },
-									price: { type: "number", minimum: 0.01 },
-									stock: { type: "number", minimum: 0 },
-									category_id: {
-										type: "string",
-										format: "uuid",
-										nullable: true,
-									},
-									measurement_unit_id: {
-										type: "string",
-										format: "uuid",
-										nullable: true,
-									},
-									description: {
-										type: "string",
-										maxLength: 2000,
-										nullable: true,
-									},
-									image_url: { type: "string", format: "uri", nullable: true },
-									is_active: { type: "boolean" },
-								},
-							},
+							schema: { $ref: "#/components/schemas/ProductUpdateInput" },
 						},
 					},
 				},
@@ -1229,12 +1248,15 @@ export const swaggerDoc = {
 						description: "Produto atualizado com sucesso",
 						content: {
 							"application/json": {
-								schema: { $ref: "#/components/schemas/Product" },
+								schema: { $ref: "#/components/schemas/PublicProduct" },
 							},
 						},
 					},
+					400: { $ref: "#/components/responses/ValidationError" },
+					401: { $ref: "#/components/responses/Unauthorized" },
 					403: {
-						description: "Acesso negado ou produto de outro vendedor",
+						description:
+							"Permissão restrita a vendedores ou produto de outro vendedor",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
@@ -1242,7 +1264,8 @@ export const swaggerDoc = {
 						},
 					},
 					404: {
-						description: "Produto não encontrado",
+						description:
+							"Produto, categoria ou unidade de medida não encontrados",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
@@ -1253,50 +1276,50 @@ export const swaggerDoc = {
 			},
 			delete: {
 				tags: ["Vendedor - Produtos"],
-				summary: "Excluir ou desativar produto do produtor",
+				summary: "Excluir ou desativar um produto do produtor",
+				description:
+					"Remove o produto. Se ele já tiver histórico de vendas, é apenas desativado, e a mensagem da resposta informa o que ocorreu.",
 				security: authenticated,
-				parameters: [
-					{
-						name: "id",
-						in: "path",
-						required: true,
-						schema: { type: "string", format: "uuid" },
-					},
-				],
+				parameters: [idPathParameter],
 				responses: {
-					200: { description: "Produto removido com sucesso" },
+					200: {
+						description: "Produto removido ou desativado",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										message: {
+											type: "string",
+											example: "Produto excluído com sucesso.",
+										},
+									},
+									required: ["message"],
+								},
+							},
+						},
+					},
+					400: { $ref: "#/components/responses/ValidationError" },
+					401: { $ref: "#/components/responses/Unauthorized" },
 					403: {
-						description: "Acesso negado ou produto de outro vendedor",
+						description:
+							"Permissão restrita a vendedores ou produto de outro vendedor",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
 							},
 						},
 					},
-					404: {
-						description: "Produto não encontrado",
-						content: {
-							"application/json": {
-								schema: { $ref: "#/components/schemas/ErrorResponse" },
-							},
-						},
-					},
+					404: { $ref: "#/components/responses/NotFound" },
 				},
 			},
 		},
 		"/vendedor/produtos/{id}/toggle-ativo": {
 			patch: {
 				tags: ["Vendedor - Produtos"],
-				summary: "Ativar ou desativar anúncio do produto",
+				summary: "Ativar ou desativar o anúncio do produto",
 				security: authenticated,
-				parameters: [
-					{
-						name: "id",
-						in: "path",
-						required: true,
-						schema: { type: "string", format: "uuid" },
-					},
-				],
+				parameters: [idPathParameter],
 				responses: {
 					200: {
 						description: "Status do anúncio alternado com sucesso",
@@ -1307,19 +1330,28 @@ export const swaggerDoc = {
 									properties: {
 										id: { type: "string", format: "uuid" },
 										is_active: { type: "boolean" },
+										message: {
+											type: "string",
+											example: "Anúncio do produto desativado com sucesso.",
+										},
 									},
+									required: ["id", "is_active", "message"],
 								},
 							},
 						},
 					},
+					400: { $ref: "#/components/responses/ValidationError" },
+					401: { $ref: "#/components/responses/Unauthorized" },
 					403: {
-						description: "Acesso negado ou produto de outro vendedor",
+						description:
+							"Permissão restrita a vendedores ou produto de outro vendedor",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
 							},
 						},
 					},
+					404: { $ref: "#/components/responses/NotFound" },
 				},
 			},
 		},
