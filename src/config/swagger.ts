@@ -114,6 +114,11 @@ export const swaggerDoc = {
 			description:
 				"Avaliações de compras finalizadas, com listagem pública por produto e por vendedor",
 		},
+		{
+			name: "Chat",
+			description:
+				"Conversas entre cliente e vendedor: histórico, mensagens, leitura e encerramento (o envio em tempo real usa Socket.io)",
+		},
 	],
 	components: {
 		securitySchemes: {
@@ -726,7 +731,6 @@ export const swaggerDoc = {
 					"payments",
 				],
 			},
-<<<<<<< HEAD
 			FormattedSaleItem: {
 				type: "object",
 				description: "Item de venda com os totais já calculados",
@@ -938,7 +942,7 @@ export const swaggerDoc = {
 					},
 				},
 				required: ["sale_id", "rating"],
-=======
+			},
 			IniciarChatInput: {
 				type: "object",
 				properties: {
@@ -1060,7 +1064,6 @@ export const swaggerDoc = {
 					limit: { type: "integer", example: 50 },
 				},
 				required: ["messages", "total", "page", "limit"],
->>>>>>> chore/VER-100-pipeline-ci-backend
 			},
 		},
 	},
@@ -2299,7 +2302,6 @@ export const swaggerDoc = {
 				},
 			},
 		},
-<<<<<<< HEAD
 		"/vendedor/pedidos": {
 			get: {
 				tags: ["Vendedor - Pedidos"],
@@ -2322,30 +2324,15 @@ export const swaggerDoc = {
 				responses: {
 					200: {
 						description: "Pedidos retornados com sucesso",
-=======
-		"/chats": {
-			get: {
-				tags: ["Chat"],
-				summary: "Listar todas as conversas do usuário autenticado",
-				security: [{ bearerAuth: [] }],
-				responses: {
-					200: {
-						description: "Lista de chats do usuário",
->>>>>>> chore/VER-100-pipeline-ci-backend
 						content: {
 							"application/json": {
 								schema: {
 									type: "array",
-<<<<<<< HEAD
 									items: { $ref: "#/components/schemas/SellerOrder" },
-=======
-									items: { $ref: "#/components/schemas/ChatResponse" },
->>>>>>> chore/VER-100-pipeline-ci-backend
 								},
 							},
 						},
 					},
-<<<<<<< HEAD
 					400: { $ref: "#/components/responses/ValidationError" },
 					401: { $ref: "#/components/responses/Unauthorized" },
 					403: { $ref: "#/components/responses/Forbidden" },
@@ -2424,10 +2411,6 @@ export const swaggerDoc = {
 					},
 					404: {
 						description: "Pedido ou perfil de vendedor não encontrado",
-=======
-					401: {
-						description: "Não autenticado",
->>>>>>> chore/VER-100-pipeline-ci-backend
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
@@ -2436,7 +2419,6 @@ export const swaggerDoc = {
 					},
 				},
 			},
-<<<<<<< HEAD
 		},
 		"/avaliacoes": {
 			post: {
@@ -2445,69 +2427,35 @@ export const swaggerDoc = {
 				description:
 					"Somente o cliente que fez a compra pode avaliá-la, apenas quando ela estiver FINALIZADA e uma única vez. A avaliação não pode ser editada nem excluída.",
 				security: authenticated,
-=======
-			post: {
-				tags: ["Chat"],
-				summary: "Iniciar ou obter conversa ativa entre cliente e vendedor",
-				security: [{ bearerAuth: [] }],
->>>>>>> chore/VER-100-pipeline-ci-backend
 				requestBody: {
 					required: true,
 					content: {
 						"application/json": {
-<<<<<<< HEAD
 							schema: { $ref: "#/components/schemas/CreateReviewInput" },
-=======
-							schema: { $ref: "#/components/schemas/IniciarChatInput" },
->>>>>>> chore/VER-100-pipeline-ci-backend
 						},
 					},
 				},
 				responses: {
 					201: {
-<<<<<<< HEAD
 						description: "Avaliação registrada com sucesso",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/Review" },
-=======
-						description: "Chat criado ou localizado",
-						content: {
-							"application/json": {
-								schema: { $ref: "#/components/schemas/ChatResponse" },
->>>>>>> chore/VER-100-pipeline-ci-backend
 							},
 						},
 					},
 					400: {
-<<<<<<< HEAD
 						description:
 							"Dados inválidos, compra ainda não finalizada ou compra já avaliada",
-=======
-						description: "Dados inválidos ou auto-chat",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
 							},
 						},
 					},
-					403: {
-						description: "Acesso negado à venda",
->>>>>>> chore/VER-100-pipeline-ci-backend
-						content: {
-							"application/json": {
-								schema: { $ref: "#/components/schemas/ErrorResponse" },
-							},
-						},
-					},
-<<<<<<< HEAD
 					401: { $ref: "#/components/responses/Unauthorized" },
 					404: {
 						description: "Compra não encontrada ou pertencente a outro cliente",
-=======
-					404: {
-						description: "Vendedor, produto ou venda não encontrados",
->>>>>>> chore/VER-100-pipeline-ci-backend
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
@@ -2517,7 +2465,6 @@ export const swaggerDoc = {
 				},
 			},
 		},
-<<<<<<< HEAD
 		"/avaliacoes/vendedor/{sellerId}": {
 			get: {
 				tags: ["Avaliações"],
@@ -2530,12 +2477,136 @@ export const swaggerDoc = {
 						in: "path",
 						required: true,
 						description: "ID do perfil de vendedor (`seller.id`)",
-=======
+						schema: { type: "string", format: "uuid" },
+					},
+				],
+				responses: {
+					200: {
+						description: "Avaliações retornadas com sucesso",
+						content: {
+							"application/json": {
+								schema: {
+									type: "array",
+									items: { $ref: "#/components/schemas/FormattedReview" },
+								},
+							},
+						},
+					},
+					400: { $ref: "#/components/responses/ValidationError" },
+				},
+			},
+		},
+		"/avaliacoes/produto/{productId}": {
+			get: {
+				tags: ["Avaliações"],
+				summary: "Listar as avaliações recebidas por um produto",
+				description:
+					"Rota pública, da mais recente para a mais antiga. A média e a contagem do produto também aparecem em `GET /produtos/{id}`.",
+				parameters: [
+					{
+						name: "productId",
+						in: "path",
+						required: true,
+						description: "ID do produto",
+						schema: { type: "string", format: "uuid" },
+					},
+				],
+				responses: {
+					200: {
+						description: "Avaliações retornadas com sucesso",
+						content: {
+							"application/json": {
+								schema: {
+									type: "array",
+									items: { $ref: "#/components/schemas/FormattedReview" },
+								},
+							},
+						},
+					},
+					400: { $ref: "#/components/responses/ValidationError" },
+				},
+			},
+		},
+		"/chats": {
+			get: {
+				tags: ["Chat"],
+				summary: "Listar todas as conversas do usuário autenticado",
+				security: authenticated,
+				responses: {
+					200: {
+						description: "Lista de chats do usuário",
+						content: {
+							"application/json": {
+								schema: {
+									type: "array",
+									items: { $ref: "#/components/schemas/ChatResponse" },
+								},
+							},
+						},
+					},
+					401: {
+						description: "Não autenticado",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+				},
+			},
+			post: {
+				tags: ["Chat"],
+				summary: "Iniciar ou obter conversa ativa entre cliente e vendedor",
+				security: authenticated,
+				requestBody: {
+					required: true,
+					content: {
+						"application/json": {
+							schema: { $ref: "#/components/schemas/IniciarChatInput" },
+						},
+					},
+				},
+				responses: {
+					201: {
+						description: "Chat criado ou localizado",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ChatResponse" },
+							},
+						},
+					},
+					400: {
+						description: "Dados inválidos ou auto-chat",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					403: {
+						description: "Acesso negado à venda",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					404: {
+						description: "Vendedor, produto ou venda não encontrados",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+				},
+			},
+		},
 		"/chats/iniciar": {
 			post: {
 				tags: ["Chat"],
 				summary: "Iniciar ou obter conversa ativa (compatibilidade Jira)",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				requestBody: {
 					required: true,
 					content: {
@@ -2568,7 +2639,7 @@ export const swaggerDoc = {
 			get: {
 				tags: ["Chat"],
 				summary: "Contagem de mensagens não lidas do usuário autenticado",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				parameters: [
 					{
 						name: "chat_id",
@@ -2603,26 +2674,17 @@ export const swaggerDoc = {
 			get: {
 				tags: ["Chat"],
 				summary: "Obter detalhes de uma conversa",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				parameters: [
 					{
 						name: "id",
 						in: "path",
 						required: true,
->>>>>>> chore/VER-100-pipeline-ci-backend
 						schema: { type: "string", format: "uuid" },
 					},
 				],
 				responses: {
 					200: {
-<<<<<<< HEAD
-						description: "Avaliações retornadas com sucesso",
-						content: {
-							"application/json": {
-								schema: {
-									type: "array",
-									items: { $ref: "#/components/schemas/FormattedReview" },
-=======
 						description: "Detalhes do chat",
 						content: {
 							"application/json": {
@@ -2653,7 +2715,7 @@ export const swaggerDoc = {
 			get: {
 				tags: ["Chat"],
 				summary: "Listar mensagens de uma conversa com paginação",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				parameters: [
 					{
 						name: "id",
@@ -2691,29 +2753,10 @@ export const swaggerDoc = {
 							"application/json": {
 								schema: {
 									$ref: "#/components/schemas/MessagesListResponse",
->>>>>>> chore/VER-100-pipeline-ci-backend
 								},
 							},
 						},
 					},
-<<<<<<< HEAD
-					400: { $ref: "#/components/responses/ValidationError" },
-				},
-			},
-		},
-		"/avaliacoes/produto/{productId}": {
-			get: {
-				tags: ["Avaliações"],
-				summary: "Listar as avaliações recebidas por um produto",
-				description:
-					"Rota pública, da mais recente para a mais antiga. A média e a contagem do produto também aparecem em `GET /produtos/{id}`.",
-				parameters: [
-					{
-						name: "productId",
-						in: "path",
-						required: true,
-						description: "ID do produto",
-=======
 					403: {
 						description: "Usuário não é participante da conversa",
 						content: {
@@ -2727,7 +2770,7 @@ export const swaggerDoc = {
 			post: {
 				tags: ["Chat"],
 				summary: "Enviar mensagem via REST",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				parameters: [
 					{
 						name: "id",
@@ -2776,26 +2819,17 @@ export const swaggerDoc = {
 			patch: {
 				tags: ["Chat"],
 				summary: "Marcar mensagens da conversa como lidas",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				parameters: [
 					{
 						name: "id",
 						in: "path",
 						required: true,
->>>>>>> chore/VER-100-pipeline-ci-backend
 						schema: { type: "string", format: "uuid" },
 					},
 				],
 				responses: {
 					200: {
-<<<<<<< HEAD
-						description: "Avaliações retornadas com sucesso",
-						content: {
-							"application/json": {
-								schema: {
-									type: "array",
-									items: { $ref: "#/components/schemas/FormattedReview" },
-=======
 						description: "Mensagens marcadas como lidas",
 						content: {
 							"application/json": {
@@ -2805,14 +2839,10 @@ export const swaggerDoc = {
 										success: { type: "boolean", example: true },
 										count: { type: "integer", example: 3 },
 									},
->>>>>>> chore/VER-100-pipeline-ci-backend
 								},
 							},
 						},
 					},
-<<<<<<< HEAD
-					400: { $ref: "#/components/responses/ValidationError" },
-=======
 					403: {
 						description: "Usuário não participa da conversa",
 						content: {
@@ -2828,7 +2858,7 @@ export const swaggerDoc = {
 			patch: {
 				tags: ["Chat"],
 				summary: "Encerrar conversa (altera status para FINALIZADO)",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				parameters: [
 					{
 						name: "id",
@@ -2854,7 +2884,6 @@ export const swaggerDoc = {
 							},
 						},
 					},
->>>>>>> chore/VER-100-pipeline-ci-backend
 				},
 			},
 		},
