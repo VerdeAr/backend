@@ -49,7 +49,7 @@ Legenda dos status do Jira: **Feito**, **Revisão** (code review), **Fazendo**, 
 | Tarefa | Status | Backend | Frontend | QA |
 |---|---|---|---|---|
 | VER-74 — Blindagem de autenticação com cookies HTTP-Only | Fazendo | VER-75 Feito | VER-76 Revisão | VER-77 A fazer |
-| VER-58 — Mensagens e chat com WebSocket (Socket.io) | Fazendo | VER-59 **Feito** (servidor Socket.io, handshake JWT e persistência de mensagens) | VER-60 A fazer | VER-61 A fazer |
+| VER-58 — Mensagens e chat com WebSocket (Socket.io) | Fazendo | VER-59 **Revisão** (servidor Socket.io, handshake JWT e persistência de mensagens) | VER-60 A fazer | VER-61 A fazer |
 | VER-66 — PDP | Feito | VER-67 Feito | VER-68 Feito | VER-69 **Fazendo** (QA ainda em curso) |
 
 ---
