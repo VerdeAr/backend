@@ -8,6 +8,8 @@ export default defineConfig({
 		},
 	},
 	test: {
+		globalSetup: ["tests/setup/global.ts"],
+		setupFiles: ["tests/setup/env.ts", "tests/setup/database.ts"],
 		environment: "node",
 		include: ["tests/**/*.test.ts"],
 		// Os testes de integração compartilham o mesmo banco, então rodam em sequência
