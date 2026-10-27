@@ -27,7 +27,6 @@ router.use("/vendedor/pedidos", sellerOrderRoutes);
 router.use("/carrinho", cartRoutes);
 router.use("/vendas", saleRoutes);
 router.use("/avaliacoes", reviewRoutes);
-router.use("/chat", chatRoutes);
 router.use("/chats", chatRoutes);
 
 export { router };

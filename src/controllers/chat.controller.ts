@@ -11,7 +11,7 @@ import { getIO } from "@/websocket/socket.server";
 
 export class ChatController {
 	/**
-	 * POST /chats ou POST /chat/iniciar
+	 * POST /chats ou POST /chats/iniciar
 	 * Inicia ou localiza um chat ativo entre cliente e vendedor.
 	 */
 	async iniciar(req: Request, res: Response, next: NextFunction) {
@@ -35,7 +35,7 @@ export class ChatController {
 	}
 
 	/**
-	 * GET /chats ou GET /chat
+	 * GET /chats
 	 * Lista todos os chats do usuário autenticado.
 	 */
 	async listar(req: Request, res: Response, next: NextFunction) {
@@ -49,7 +49,7 @@ export class ChatController {
 	}
 
 	/**
-	 * GET /chat/nao-lidas/count ou GET /chats/nao-lidas/count
+	 * GET /chats/nao-lidas/count
 	 * Retorna a quantidade de mensagens não lidas.
 	 */
 	async contarNaoLidas(req: Request, res: Response, next: NextFunction) {

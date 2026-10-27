@@ -27,6 +27,7 @@ API RESTful do **VerdeAr**, um marketplace que conecta produtores familiares e o
 | Validação | Zod (DTOs inferidos com `z.infer`) |
 | Documentação | swagger-ui-express (OpenAPI 3.0) |
 | Qualidade | Biome |
+| Testes | Vitest + Supertest, com PostgreSQL de testes em contêiner |
 | Git hooks | Husky + Commitlint (Conventional Commits) |
 | Container | Docker multi-stage (Node Alpine) |
 
@@ -88,13 +89,47 @@ Documentação interativa:
 | `npm run dev` | Servidor com hot reload (`tsx watch`) |
 | `npm run build` | Compila TypeScript para `dist/` |
 | `npm start` | Executa a build (`node dist/server.js`) |
-| `npm run check` | Type check + Biome com `--error-on-warnings` |
+| `npm run check` | Type check (código e testes) + Biome com `--error-on-warnings` |
+| `npm test` | Executa os testes de integração (exige o banco de testes) |
+| `npm run test:watch` | Testes em modo observação |
 | `npm run lint` | Biome |
 | `npm run migration:generate` | Gera migration a partir das entidades |
 | `npm run migration:run` | Aplica migrations pendentes |
 | `npm run migration:revert` | Reverte a última migration |
 | `npm run migration:run:prod` | Aplica migrations sobre `dist/` |
 | `npm run seed` | Popula dados essenciais |
+
+## Testes
+
+Os testes são de integração: sobem a API (sem `listen`) e fazem requisições reais com Supertest contra um PostgreSQL de testes. Cobrem o caminho feliz do fluxo principal (cadastro, login, produto, carrinho, checkout, finalização e avaliação), erros importantes (carrinho vazio, estoque, permissões, avaliação duplicada, cancelamento), os endpoints de saúde e a consistência do Swagger com as rotas.
+
+### Pré-requisito
+
+Apenas o **Docker**. O PostgreSQL de testes roda em um contêiner (`docker-compose.test.yml`), então **não é preciso instalar o PostgreSQL** na máquina.
+
+### Passo a passo
+
+```bash
+# 1. Variáveis dos testes (arquivo não versionado)
+cp .env.test.example .env.test
+
+# 2. Banco de testes descartável (porta 5433, dados em memória)
+docker compose -f docker-compose.test.yml up -d --wait
+
+# 3. Testes
+npm test
+
+# 4. Ao terminar (opcional)
+docker compose -f docker-compose.test.yml down
+```
+
+### Como funciona
+
+- Antes da suíte, as migrations e o seed rodam automaticamente no banco de testes.
+- **Trava de segurança:** os testes só executam se `DB_NAME` terminar em `_test`. Isso impede rodar por engano contra o banco de homologação ou de produção.
+- Cada teste cria usuários e produtos com dados únicos (CPF, CNPJ e e-mail gerados), então a suíte pode rodar várias vezes seguidas sem limpar o banco.
+- Os arquivos rodam em sequência, porque compartilham o mesmo banco.
+- No CI, as variáveis `DB_*` e `JWT_SECRET` vêm do ambiente do workflow e o `.env.test` não é necessário.
 
 ## Docker
 
