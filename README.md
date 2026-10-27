@@ -55,8 +55,8 @@ npm run dev
 
 Documentação interativa:
 
-- Swagger UI: `http://localhost:3000/docs` ou `http://localhost:3000/api-docs`
-- OpenAPI JSON: `http://localhost:3000/api-docs.json`
+- Swagger UI: `http://localhost:3000/docs`
+- OpenAPI JSON: `http://localhost:3000/docs.json`
 
 ### Variáveis de ambiente
 
