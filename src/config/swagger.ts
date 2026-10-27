@@ -1,9 +1,17 @@
+// Autenticação aceita pelas rotas protegidas: o cookie HttpOnly "token" (definido no login
+// e no cadastro) ou o cabeçalho Authorization: Bearer <token>
+const authenticated = [{ cookieAuth: [] }, { bearerAuth: [] }];
+
 export const swaggerDoc = {
 	openapi: "3.0.0",
 	info: {
 		title: "Verdear API",
 		description:
-			"Documentação da API REST do ecossistema Verdear (Agricultura Familiar e E-commerce Sustentável)",
+			"Documentação da API REST do ecossistema Verdear (Agricultura Familiar e E-commerce Sustentável).\n\n" +
+			"**Autenticação:** o login e o cadastro gravam o JWT no cookie `token` (HttpOnly, 7 dias). " +
+			"As rotas protegidas também aceitam o cabeçalho `Authorization: Bearer <token>`.\n\n" +
+			"**Valores decimais:** preços, estoque e frete das entidades (`Product`, `UserResponse`) são serializados como texto " +
+			'(ex.: `"8.50"`). Os totais do carrinho e das vendas formatadas são numéricos.',
 		version: "1.0.0",
 	},
 	servers: [
@@ -12,14 +20,114 @@ export const swaggerDoc = {
 			description: "Servidor padrão",
 		},
 	],
+	tags: [
+		{
+			name: "Saúde",
+			description:
+				"Verificações de disponibilidade usadas por contêineres e monitoramento",
+		},
+		{
+			name: "Autenticação",
+			description: "Cadastro, login, logout e sessão do usuário",
+		},
+		{
+			name: "Pessoa e Perfil",
+			description: "Dados cadastrais, senha e frete fixo do vendedor",
+		},
+		{ name: "Bairros", description: "Bairros disponíveis para endereçamento" },
+		{
+			name: "Produtos (Público)",
+			description: "Vitrine pública: listagem com filtros e detalhe do produto",
+		},
+		{ name: "Categorias", description: "Categorias de produtos" },
+		{
+			name: "Unidades de Medida",
+			description: "Unidades de medida dos produtos",
+		},
+		{
+			name: "Vendedor - Produtos",
+			description: "Gestão do catálogo do vendedor (exige papel VENDEDOR)",
+		},
+		{
+			name: "Carrinho",
+			description:
+				"Carrinho persistente do usuário, entrega, frete e pagamento",
+		},
+		{
+			name: "Vendas e Checkout",
+			description:
+				"Finalização da compra, histórico do cliente e status das vendas",
+		},
+		{
+			name: "Vendedor - Pedidos",
+			description: "Pedidos recebidos pelo vendedor (exige papel VENDEDOR)",
+		},
+	],
 	components: {
 		securitySchemes: {
+			cookieAuth: {
+				type: "apiKey",
+				in: "cookie",
+				name: "token",
+				description:
+					"Cookie HttpOnly `token` com o JWT, definido automaticamente em `/auth/login` e `/auth/register`.",
+			},
 			bearerAuth: {
 				type: "http",
 				scheme: "bearer",
 				bearerFormat: "JWT",
 				description:
-					"Insira o token JWT gerado no login no formato: Bearer <seu_token>",
+					"Alternativa ao cookie, útil para clientes de API: `Authorization: Bearer <token>`.",
+			},
+		},
+		responses: {
+			ValidationError: {
+				description: "Dados de entrada inválidos",
+				content: {
+					"application/json": {
+						schema: { $ref: "#/components/schemas/ErrorResponse" },
+					},
+				},
+			},
+			Unauthorized: {
+				description: "Não autenticado: token ausente, inválido ou expirado",
+				content: {
+					"application/json": {
+						schema: { $ref: "#/components/schemas/ErrorResponse" },
+					},
+				},
+			},
+			Forbidden: {
+				description: "Acesso negado: permissão insuficiente para o recurso",
+				content: {
+					"application/json": {
+						schema: { $ref: "#/components/schemas/ErrorResponse" },
+					},
+				},
+			},
+			NotFound: {
+				description: "Recurso não encontrado",
+				content: {
+					"application/json": {
+						schema: { $ref: "#/components/schemas/ErrorResponse" },
+					},
+				},
+			},
+			Conflict: {
+				description: "Conflito com dados já existentes",
+				content: {
+					"application/json": {
+						schema: { $ref: "#/components/schemas/ErrorResponse" },
+					},
+				},
+			},
+			InternalError: {
+				description: "Erro interno do servidor",
+				content: {
+					"application/json": {
+						schema: { $ref: "#/components/schemas/ErrorResponse" },
+					},
+				},
 			},
 		},
 		schemas: {
@@ -33,6 +141,7 @@ export const swaggerDoc = {
 					},
 					errors: {
 						type: "array",
+						description: "Detalhes por campo, presente em erros de validação",
 						items: {
 							type: "object",
 							properties: {
@@ -56,7 +165,9 @@ export const swaggerDoc = {
 						example: "c4b4a1b0-4f5a-4b9d-b8d1-7c9b8a1b04f5",
 					},
 					name: { type: "string", example: "Centro" },
-					city: { type: "string", example: "Pato Branco" },
+					city: { type: "string", example: "Cornélio Procópio" },
+					created_at: { type: "string", format: "date-time" },
+					updated_at: { type: "string", format: "date-time" },
 				},
 				required: ["id", "name", "city"],
 			},
@@ -77,6 +188,7 @@ export const swaggerDoc = {
 					cnpj: {
 						type: "string",
 						nullable: true,
+						description: "Somente dígitos",
 						example: "12345678000195",
 					},
 					farm_name: {
@@ -84,11 +196,14 @@ export const swaggerDoc = {
 						nullable: true,
 						example: "Sítio Primavera",
 					},
+					created_at: { type: "string", format: "date-time" },
+					updated_at: { type: "string", format: "date-time" },
 				},
 				required: ["id", "user_id"],
 			},
 			UserResponse: {
 				type: "object",
+				description: "Usuário sem o campo de senha",
 				properties: {
 					id: {
 						type: "string",
@@ -101,7 +216,12 @@ export const swaggerDoc = {
 						format: "email",
 						example: "maria@verdear.com",
 					},
-					cpf: { type: "string", example: "12345678901" },
+					cpf: {
+						type: "string",
+						nullable: true,
+						description: "Somente dígitos",
+						example: "12345678901",
+					},
 					role: {
 						type: "string",
 						enum: ["CLIENTE", "VENDEDOR"],
@@ -115,26 +235,35 @@ export const swaggerDoc = {
 					address: {
 						type: "string",
 						nullable: true,
-						example: "Linha São Roque, Km 4",
+						example: "Rua das Flores, 120",
 					},
 					neighborhood_id: {
 						type: "string",
 						format: "uuid",
 						nullable: true,
 					},
-					fixed_shipping_rate: {
-						type: "number",
-						nullable: true,
-						example: 10.0,
-					},
 					neighborhood: {
-						$ref: "#/components/schemas/Neighborhood",
+						allOf: [{ $ref: "#/components/schemas/Neighborhood" }],
+						nullable: true,
 					},
+					is_active: { type: "boolean", example: true },
+					fixed_shipping_rate: {
+						type: "string",
+						nullable: true,
+						description:
+							"Frete fixo do vendedor, serializado como texto. Nulo para clientes; vendedores começam em 0.00",
+						example: "12.50",
+					},
+					last_seen: { type: "string", format: "date-time", nullable: true },
 					seller: {
-						$ref: "#/components/schemas/SellerProfile",
+						allOf: [{ $ref: "#/components/schemas/SellerProfile" }],
+						nullable: true,
+						description: "Presente apenas para usuários com papel VENDEDOR",
 					},
+					created_at: { type: "string", format: "date-time" },
+					updated_at: { type: "string", format: "date-time" },
 				},
-				required: ["id", "name", "email", "cpf", "role"],
+				required: ["id", "name", "email", "role"],
 			},
 			Category: {
 				type: "object",
@@ -144,12 +273,9 @@ export const swaggerDoc = {
 						format: "uuid",
 						example: "f1a2b3c4-d5e6-7890-1234-56789abcdef0",
 					},
-					name: { type: "string", example: "Verduras e Legumes" },
-					description: {
-						type: "string",
-						nullable: true,
-						example: "Hortaliças e tubérculos frescos",
-					},
+					name: { type: "string", example: "Hortifrúti" },
+					created_at: { type: "string", format: "date-time" },
+					updated_at: { type: "string", format: "date-time" },
 				},
 				required: ["id", "name"],
 			},
@@ -161,10 +287,12 @@ export const swaggerDoc = {
 						format: "uuid",
 						example: "9a8b7c6d-5e4f-3210-fedc-ba9876543210",
 					},
-					name: { type: "string", example: "Quilograma" },
-					abbreviation: { type: "string", example: "kg" },
+					name: { type: "string", example: "Quilo" },
+					symbol: { type: "string", nullable: true, example: "kg" },
+					created_at: { type: "string", format: "date-time" },
+					updated_at: { type: "string", format: "date-time" },
 				},
-				required: ["id", "name", "abbreviation"],
+				required: ["id", "name"],
 			},
 			Product: {
 				type: "object",
@@ -174,9 +302,33 @@ export const swaggerDoc = {
 						format: "uuid",
 						example: "1a2b3c4d-5e6f-7890-abcd-ef1234567890",
 					},
+					seller_id: { type: "string", format: "uuid" },
+					category_id: { type: "string", format: "uuid", nullable: true },
+					category: {
+						allOf: [{ $ref: "#/components/schemas/Category" }],
+						nullable: true,
+					},
+					measurement_unit_id: {
+						type: "string",
+						format: "uuid",
+						nullable: true,
+					},
+					measurement_unit: {
+						allOf: [{ $ref: "#/components/schemas/MeasurementUnit" }],
+						nullable: true,
+					},
 					name: { type: "string", example: "Alface Crespa Hidropônica" },
-					price: { type: "number", example: 4.5 },
-					stock: { type: "number", example: 50 },
+					price: {
+						type: "string",
+						description: "Preço unitário, serializado como texto",
+						example: "4.50",
+					},
+					stock: {
+						type: "string",
+						description:
+							"Estoque disponível (aceita frações), serializado como texto",
+						example: "50.000",
+					},
 					description: {
 						type: "string",
 						nullable: true,
@@ -188,21 +340,67 @@ export const swaggerDoc = {
 						example: "https://verdear.com/images/alface.jpg",
 					},
 					is_active: { type: "boolean", example: true },
-					seller_id: { type: "string", format: "uuid" },
-					category_id: { type: "string", format: "uuid", nullable: true },
-					measurement_unit_id: {
-						type: "string",
-						format: "uuid",
-						nullable: true,
-					},
-					category: { $ref: "#/components/schemas/Category" },
-					measurement_unit: {
-						$ref: "#/components/schemas/MeasurementUnit",
-					},
 					created_at: { type: "string", format: "date-time" },
 					updated_at: { type: "string", format: "date-time" },
 				},
 				required: ["id", "name", "price", "stock", "seller_id", "is_active"],
+			},
+			ProductSeller: {
+				type: "object",
+				description:
+					"Produtor que anuncia o produto, com os dados de contato do usuário",
+				allOf: [{ $ref: "#/components/schemas/SellerProfile" }],
+				properties: {
+					user: {
+						type: "object",
+						properties: {
+							id: { type: "string", format: "uuid" },
+							name: { type: "string", example: "Maria da Silva" },
+							email: {
+								type: "string",
+								format: "email",
+								example: "maria@verdear.com",
+							},
+							phone: { type: "string", nullable: true, example: "46999998888" },
+							fixed_shipping_rate: {
+								type: "string",
+								nullable: true,
+								example: "12.50",
+							},
+						},
+					},
+				},
+			},
+			PublicProduct: {
+				description: "Produto com os dados do produtor",
+				allOf: [
+					{ $ref: "#/components/schemas/Product" },
+					{
+						type: "object",
+						properties: {
+							seller: { $ref: "#/components/schemas/ProductSeller" },
+						},
+					},
+				],
+			},
+			ProductDetail: {
+				description: "Detalhe do produto com as métricas de avaliação",
+				allOf: [
+					{ $ref: "#/components/schemas/PublicProduct" },
+					{
+						type: "object",
+						properties: {
+							average_rating: {
+								type: "number",
+								description:
+									"Média das notas (1 casa decimal); 0 quando não há avaliações",
+								example: 4.5,
+							},
+							review_count: { type: "integer", example: 12 },
+						},
+						required: ["average_rating", "review_count"],
+					},
+				],
 			},
 			CartItem: {
 				type: "object",
@@ -539,7 +737,7 @@ export const swaggerDoc = {
 			get: {
 				tags: ["Autenticação"],
 				summary: "Obter perfil do usuário autenticado",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				responses: {
 					200: {
 						description: "Perfil retornado com sucesso",
@@ -564,7 +762,7 @@ export const swaggerDoc = {
 			put: {
 				tags: ["Pessoa e Perfil"],
 				summary: "Atualizar dados de perfil do usuário ou vendedor",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				requestBody: {
 					required: true,
 					content: {
@@ -626,7 +824,7 @@ export const swaggerDoc = {
 			put: {
 				tags: ["Pessoa e Perfil"],
 				summary: "Atualizar senha do usuário autenticado",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				requestBody: {
 					required: true,
 					content: {
@@ -672,7 +870,7 @@ export const swaggerDoc = {
 			put: {
 				tags: ["Pessoa e Perfil"],
 				summary: "Configurar taxa de frete fixo do vendedor",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				requestBody: {
 					required: true,
 					content: {
@@ -885,7 +1083,7 @@ export const swaggerDoc = {
 			get: {
 				tags: ["Vendedor - Produtos"],
 				summary: "Listar todos os produtos do produtor rural logado",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				responses: {
 					200: {
 						description: "Catálogo do produtor retornado com sucesso",
@@ -919,7 +1117,7 @@ export const swaggerDoc = {
 			post: {
 				tags: ["Vendedor - Produtos"],
 				summary: "Cadastrar novo produto agrícola para venda",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				requestBody: {
 					required: true,
 					content: {
@@ -985,7 +1183,7 @@ export const swaggerDoc = {
 			put: {
 				tags: ["Vendedor - Produtos"],
 				summary: "Atualizar dados e estoque de um produto do produtor",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				parameters: [
 					{
 						name: "id",
@@ -1056,7 +1254,7 @@ export const swaggerDoc = {
 			delete: {
 				tags: ["Vendedor - Produtos"],
 				summary: "Excluir ou desativar produto do produtor",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				parameters: [
 					{
 						name: "id",
@@ -1090,7 +1288,7 @@ export const swaggerDoc = {
 			patch: {
 				tags: ["Vendedor - Produtos"],
 				summary: "Ativar ou desativar anúncio do produto",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				parameters: [
 					{
 						name: "id",
@@ -1129,7 +1327,7 @@ export const swaggerDoc = {
 			get: {
 				tags: ["Carrinho"],
 				summary: "Obter carrinho persistente do usuário com itens e cálculos",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				responses: {
 					200: {
 						description: "Carrinho retornado com sucesso",
@@ -1152,7 +1350,7 @@ export const swaggerDoc = {
 			delete: {
 				tags: ["Carrinho"],
 				summary: "Esvaziar todos os itens do carrinho",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				responses: {
 					200: {
 						description: "Carrinho esvaziado com sucesso",
@@ -1177,7 +1375,7 @@ export const swaggerDoc = {
 			post: {
 				tags: ["Carrinho"],
 				summary: "Adicionar item ou incrementar quantidade no carrinho",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				requestBody: {
 					required: true,
 					content: {
@@ -1225,7 +1423,7 @@ export const swaggerDoc = {
 			patch: {
 				tags: ["Carrinho"],
 				summary: "Atualizar quantidade de item existente no carrinho",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				parameters: [
 					{
 						name: "id",
@@ -1278,7 +1476,7 @@ export const swaggerDoc = {
 			delete: {
 				tags: ["Carrinho"],
 				summary: "Remover item específico do carrinho",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				parameters: [
 					{
 						name: "id",
@@ -1311,7 +1509,7 @@ export const swaggerDoc = {
 			post: {
 				tags: ["Carrinho"],
 				summary: "Definir modalidade de entrega (ENTREGA ou RETIRADA)",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				requestBody: {
 					required: true,
 					content: {
@@ -1353,7 +1551,7 @@ export const swaggerDoc = {
 			post: {
 				tags: ["Carrinho"],
 				summary: "Salvar preferência de forma de pagamento no carrinho",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				requestBody: {
 					required: true,
 					content: {
@@ -1384,7 +1582,7 @@ export const swaggerDoc = {
 			post: {
 				tags: ["Vendas e Checkout"],
 				summary: "Realizar checkout transacional com garantia ACID",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				requestBody: {
 					content: {
 						"application/json": {
@@ -1425,7 +1623,7 @@ export const swaggerDoc = {
 			get: {
 				tags: ["Vendas e Checkout"],
 				summary: "Listar histórico de compras do cliente autenticado",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				responses: {
 					200: {
 						description: "Lista de compras retornada com sucesso",
@@ -1445,7 +1643,7 @@ export const swaggerDoc = {
 			get: {
 				tags: ["Vendas e Checkout"],
 				summary: "Obter detalhes de uma compra específica do cliente",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				parameters: [
 					{
 						name: "id",
@@ -1478,7 +1676,7 @@ export const swaggerDoc = {
 			get: {
 				tags: ["Vendedor - Pedidos"],
 				summary: "Listar pedidos recebidos pelo produtor rural",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				parameters: [
 					{
 						name: "status",
@@ -1509,7 +1707,7 @@ export const swaggerDoc = {
 			get: {
 				tags: ["Vendedor - Pedidos"],
 				summary: "Contagem de pedidos pendentes para notificações do produtor",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				responses: {
 					200: {
 						description: "Contagem retornada",
@@ -1532,7 +1730,7 @@ export const swaggerDoc = {
 				tags: ["Vendedor - Pedidos"],
 				summary:
 					"Atualizar status do pedido pelo vendedor (com estorno de estoque em cancelamento)",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				parameters: [
 					{
 						name: "id",
@@ -1591,7 +1789,7 @@ export const swaggerDoc = {
 				tags: ["Vendas e Checkout"],
 				summary:
 					"Atualizar status do pedido (com estorno de estoque em cancelamento)",
-				security: [{ bearerAuth: [] }],
+				security: authenticated,
 				parameters: [
 					{
 						name: "id",
