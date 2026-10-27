@@ -1,6 +1,7 @@
 import type { Chat } from "@/entities/Chat";
-import { ChatStatus, UserRole } from "@/entities/enums";
+import { ChatStatus, type UserRole } from "@/entities/enums";
 import type { Message } from "@/entities/Message";
+import type { Seller } from "@/entities/Seller";
 import { AppError } from "@/errors/AppError";
 import {
 	chatRepository,
@@ -30,11 +31,14 @@ export class ChatService {
 	 * Regras de negócio (RN-47 e RN-48):
 	 * - Exclusivo entre um Cliente e um Vendedor.
 	 * - Não é permitido iniciar chat consigo mesmo.
-	 * - Vendedores só podem iniciar chat a partir de uma venda associada.
+	 * - Vendedores também compram (RN-08): qualquer usuário autenticado pode iniciar chat
+	 *   com um vendedor a partir de seller_id ou product_id (atuando como comprador).
+	 * - Em chats iniciados por sale_id, valida que o solicitante participa da venda
+	 *   (seja como comprador ou vendedor) e trata vendas com múltiplos vendedores.
 	 */
 	async iniciarChat({
 		userId,
-		userRole,
+		userRole: _userRole,
 		sellerId,
 		productId,
 		saleId,
@@ -82,18 +86,72 @@ export class ChatService {
 					},
 				},
 			});
-			const seller = sale?.items?.[0]?.product?.seller;
-			if (!sale || !seller) {
+
+			if (!sale?.items?.length) {
 				throw new AppError(
-					"Venda não encontrada ou sem vendedor associado.",
+					"Venda não encontrada ou sem itens associados.",
 					404,
 				);
 			}
-			finalSellerId = seller.id;
-			customerId = sale.customer_id;
 
-			if (seller.user_id === userId && customerId === userId) {
-				throw new AppError("Você não pode iniciar um chat consigo mesmo.", 400);
+			// Mapeia vendedores únicos participantes dos itens da venda
+			const sellersMap = new Map<string, Seller>();
+			for (const item of sale.items) {
+				if (item.product?.seller) {
+					sellersMap.set(item.product.seller.id, item.product.seller);
+				}
+			}
+			const sellersInSale = Array.from(sellersMap.values());
+
+			if (sellersInSale.length === 0) {
+				throw new AppError(
+					"Venda não possui vendedores associados aos itens.",
+					404,
+				);
+			}
+
+			const isCustomer = sale.customer_id === userId;
+			const sellerParticipant = sellersInSale.find((s) => s.user_id === userId);
+
+			if (!isCustomer && !sellerParticipant) {
+				throw new AppError(
+					"Acesso negado: você não participa desta venda.",
+					403,
+				);
+			}
+
+			if (isCustomer) {
+				customerId = userId;
+				if (sellerId) {
+					const chosen = sellersMap.get(sellerId);
+					if (!chosen) {
+						throw new AppError(
+							"O vendedor informado não possui produtos nesta venda.",
+							400,
+						);
+					}
+					finalSellerId = chosen.id;
+				} else if (sellersInSale.length === 1) {
+					finalSellerId = sellersInSale[0].id;
+				} else {
+					throw new AppError(
+						"A venda possui múltiplos vendedores. Informe seller_id para selecionar o vendedor desejado.",
+						400,
+					);
+				}
+			} else if (sellerParticipant) {
+				finalSellerId = sellerParticipant.id;
+				customerId = sale.customer_id;
+			}
+
+			if (finalSellerId && customerId) {
+				const targetSeller = sellersMap.get(finalSellerId);
+				if (targetSeller && targetSeller.user_id === customerId) {
+					throw new AppError(
+						"Você não pode iniciar um chat consigo mesmo.",
+						400,
+					);
+				}
 			}
 		} else {
 			throw new AppError(
@@ -102,9 +160,9 @@ export class ChatService {
 			);
 		}
 
-		if (userRole === UserRole.VENDEDOR && !saleId) {
+		if (!finalSellerId) {
 			throw new AppError(
-				"Vendedores só podem iniciar chat a partir de uma venda.",
+				"Não foi possível identificar o vendedor do chat.",
 				400,
 			);
 		}
