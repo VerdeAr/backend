@@ -257,13 +257,14 @@ export class ChatService {
 	}
 
 	/**
-	 * Lista as mensagens de um chat com paginação.
+	 * Lista as mensagens de um chat com paginação e ordenação (padrão DESC para trazer as mais recentes).
 	 */
 	async listarMensagens(
 		chatId: string,
 		userId: string,
 		limit = 50,
 		page = 1,
+		order: "ASC" | "DESC" = "DESC",
 	): Promise<{
 		messages: Message[];
 		total: number;
@@ -275,9 +276,23 @@ export class ChatService {
 			chatId,
 			limit,
 			page,
+			order,
 		);
 
 		return { messages, total, page, limit };
+	}
+
+	/**
+	 * Conta mensagens não lidas recebidas pelo usuário.
+	 * Se chatId for informado, conta apenas no chat especificado.
+	 * Caso contrário, conta o total em todos os chats do usuário.
+	 */
+	async contarNaoLidas(userId: string, chatId?: string): Promise<number> {
+		if (chatId) {
+			await this.validarParticipante(chatId, userId);
+			return messageRepository.countUnread(chatId, userId);
+		}
+		return messageRepository.countTotalUnread(userId);
 	}
 
 	/**

@@ -7,8 +7,14 @@ const chatController = new ChatController();
 
 chatRoutes.use(ensureAuthenticated);
 
+chatRoutes.post("/iniciar", (req, res, next) =>
+	chatController.iniciar(req, res, next),
+);
 chatRoutes.post("/", (req, res, next) =>
 	chatController.iniciar(req, res, next),
+);
+chatRoutes.get("/nao-lidas/count", (req, res, next) =>
+	chatController.contarNaoLidas(req, res, next),
 );
 chatRoutes.get("/", (req, res, next) => chatController.listar(req, res, next));
 chatRoutes.get("/:id", (req, res, next) =>

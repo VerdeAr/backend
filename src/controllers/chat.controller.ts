@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import {
 	chatIdParamSchema,
+	countUnreadQuerySchema,
 	iniciarChatSchema,
 	listMessagesQuerySchema,
 	sendMessageSchema,
@@ -10,7 +11,7 @@ import { getIO } from "@/websocket/socket.server";
 
 export class ChatController {
 	/**
-	 * POST /chats
+	 * POST /chats ou POST /chat/iniciar
 	 * Inicia ou localiza um chat ativo entre cliente e vendedor.
 	 */
 	async iniciar(req: Request, res: Response, next: NextFunction) {
@@ -34,7 +35,7 @@ export class ChatController {
 	}
 
 	/**
-	 * GET /chats
+	 * GET /chats ou GET /chat
 	 * Lista todos os chats do usuário autenticado.
 	 */
 	async listar(req: Request, res: Response, next: NextFunction) {
@@ -42,6 +43,21 @@ export class ChatController {
 			const userId = req.user!.id;
 			const chats = await chatService.listarChatsDoUsuario(userId);
 			return res.status(200).json(chats);
+		} catch (error) {
+			next(error);
+		}
+	}
+
+	/**
+	 * GET /chat/nao-lidas/count ou GET /chats/nao-lidas/count
+	 * Retorna a quantidade de mensagens não lidas.
+	 */
+	async contarNaoLidas(req: Request, res: Response, next: NextFunction) {
+		try {
+			const userId = req.user!.id;
+			const { chat_id } = countUnreadQuerySchema.parse(req.query);
+			const count = await chatService.contarNaoLidas(userId, chat_id);
+			return res.status(200).json({ count });
 		} catch (error) {
 			next(error);
 		}
@@ -69,10 +85,16 @@ export class ChatController {
 	async listarMensagens(req: Request, res: Response, next: NextFunction) {
 		try {
 			const { id } = chatIdParamSchema.parse(req.params);
-			const { page, limit } = listMessagesQuerySchema.parse(req.query);
+			const { page, limit, order } = listMessagesQuerySchema.parse(req.query);
 			const userId = req.user!.id;
 
-			const result = await chatService.listarMensagens(id, userId, limit, page);
+			const result = await chatService.listarMensagens(
+				id,
+				userId,
+				limit,
+				page,
+				order,
+			);
 			return res.status(200).json(result);
 		} catch (error) {
 			next(error);

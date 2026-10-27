@@ -7,12 +7,13 @@ export const messageRepository = AppDataSource.getRepository(Message).extend({
 		chatId: string,
 		limit = 50,
 		page = 1,
+		order: "ASC" | "DESC" = "DESC",
 	): Promise<[Message[], number]> {
 		const skip = (page - 1) * limit;
 		return this.findAndCount({
 			where: { chat_id: chatId },
 			relations: { sender: true },
-			order: { created_at: "ASC" },
+			order: { created_at: order },
 			take: limit,
 			skip,
 		});
@@ -42,5 +43,18 @@ export const messageRepository = AppDataSource.getRepository(Message).extend({
 				is_read: false,
 			},
 		});
+	},
+
+	async countTotalUnread(userId: string): Promise<number> {
+		const qb = this.createQueryBuilder("message")
+			.innerJoin("message.chat", "chat")
+			.leftJoin("chat.seller", "seller")
+			.where("(chat.customer_id = :userId OR seller.user_id = :userId)", {
+				userId,
+			})
+			.andWhere("message.sender_id != :userId", { userId })
+			.andWhere("message.is_read = false");
+
+		return qb.getCount();
 	},
 });

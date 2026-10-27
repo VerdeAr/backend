@@ -33,9 +33,19 @@ export type ChatIdParam = z.infer<typeof chatIdParamSchema>;
 export const listMessagesQuerySchema = z.object({
 	page: z.coerce.number().int().min(1).default(1),
 	limit: z.coerce.number().int().min(1).max(100).default(50),
+	order: z
+		.enum(["ASC", "DESC", "asc", "desc"])
+		.default("DESC")
+		.transform((val) => val.toUpperCase() as "ASC" | "DESC"),
 });
 
 export type ListMessagesQuery = z.infer<typeof listMessagesQuerySchema>;
+
+export const countUnreadQuerySchema = z.object({
+	chat_id: z.string().uuid("ID de chat inválido.").optional(),
+});
+
+export type CountUnreadQuery = z.infer<typeof countUnreadQuerySchema>;
 
 export const socketChatIdSchema = z.object({
 	chat_id: z.string().uuid("ID de chat inválido."),
