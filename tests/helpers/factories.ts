@@ -93,3 +93,36 @@ export async function loginAs(credentials: TestCredentials): Promise<Client> {
 
 	return client;
 }
+
+export interface CreatedProduct {
+	id: string;
+	name: string;
+}
+
+// Cria um produto ativo usando a primeira categoria e unidade de medida do seed
+export async function createProduct(
+	seller: Client,
+	overrides: { name?: string; price?: number; stock?: number } = {},
+): Promise<CreatedProduct> {
+	const [categories, units] = await Promise.all([
+		seller.get("/categorias"),
+		seller.get("/unidades-medida"),
+	]);
+
+	const response = await seller.post("/vendedor/produtos").send({
+		name: overrides.name ?? `Tomate ${randomUUID().slice(0, 8)}`,
+		price: overrides.price ?? 8.5,
+		stock: overrides.stock ?? 10,
+		category_id: categories.body[0].id,
+		measurement_unit_id: units.body[0].id,
+		description: "Produto criado pelos testes automatizados",
+	});
+
+	if (response.status !== 201) {
+		throw new Error(
+			`Falha ao criar produto: ${response.status} ${JSON.stringify(response.body)}`,
+		);
+	}
+
+	return { id: response.body.id, name: response.body.name };
+}
