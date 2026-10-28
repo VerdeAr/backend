@@ -56,6 +56,8 @@ Cadastre em **cada** environment:
 
 Se `API_BASE_URL` ou `DEPLOY_METHOD` não estiverem definidos, os workflows emitem um aviso e pulam a etapa correspondente, sem falhar.
 
+> **Atenção ao tipo:** as colunas *Variable* e *Secret* da tabela são diferentes no GitHub. Variáveis ficam em *Environment variables* e secrets em *Environment secrets*. Os workflows leem `API_BASE_URL`, `DEPLOY_METHOD` e as demais variáveis pelo contexto `vars`, então **um valor cadastrado como secret não é enxergado** (o run apenas avisa que a variável não está definida).
+
 ### 3.2 Proteção de branch
 
 Para o CI **bloquear o merge**, em *Settings → Branches* crie regras para `main` e `prod` exigindo os checks **Qualidade** e **Testes** (e **Commits**, se quiser) e a revisão dos code owners (`CODEOWNERS`).
@@ -170,4 +172,6 @@ curl http://localhost:3000/ready
 | `Testes` falham no CI mas passam local | O CI usa um PostgreSQL novo; confira migrations e variáveis `DB_*` |
 | `Publicar imagem` falha ao enviar | O repositório precisa da permissão de escrita em pacotes (`packages: write` já está no workflow) |
 | `Implantar` avisa que `DEPLOY_METHOD` não está definido | O environment ainda não foi configurado; a imagem foi publicada, mas nada foi implantado |
+| `Implantar` avisa que `DEPLOY_METHOD` não está definido, mas ele foi cadastrado | Foi criado como *secret* em vez de *variable* no environment |
+| Coolify falha com `error from registry: denied` | A VPS não está autenticada no `ghcr.io`: rode `docker login ghcr.io` na VPS com um token clássico `read:packages` (autorizado para a organização, se houver SSO) e reimplante |
 | `Verificar` falha após o deploy | A API não respondeu em `/ready`: veja os logs da aplicação e as variáveis `DB_*` |
