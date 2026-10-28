@@ -104,11 +104,28 @@ jobs:
             echo "::error::Defina o secret DEPLOY_WEBHOOK_URL no ambiente."
             exit 1
           fi
+          # Remove espaços e quebras de linha que costumam vir de um copiar e colar
+          METODO="$(printf '%s' "$METODO" | tr -d '[:space:]')"
+          URL="$(printf '%s' "$URL" | tr -d '[:space:]')"
+          TOKEN="$(printf '%s' "$TOKEN" | tr -d '[:space:]')"
+
+          cabecalho=()
           if [ -n "$TOKEN" ]; then
-            curl --fail --silent --show-error --max-time 60 -X "$METODO" \
-              -H "Authorization: Bearer $TOKEN" "$URL"
-          else
-            curl --fail --silent --show-error --max-time 60 -X "$METODO" "$URL"
+            cabecalho=(-H "Authorization: Bearer $TOKEN")
+          fi
+
+          status="$(curl --silent --show-error --max-time 60 -X "$METODO" \
+            "${cabecalho[@]}" -D cabecalhos.txt -o resposta.txt \
+            -w '%{http_code}' "$URL")"
+          echo "Método: $METODO | Status HTTP: $status"
+
+          if [ "$status" -ge 400 ]; then
+            echo "::error::O webhook respondeu $status."
+            echo "Métodos aceitos (cabeçalho Allow): $(grep -i '^allow:' cabecalhos.txt || echo 'não informado')"
+            echo "Resposta:"
+            head -c 500 resposta.txt
+            echo
+            exit 1
           fi
           echo "Webhook de deploy acionado."
 
