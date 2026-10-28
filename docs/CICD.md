@@ -45,7 +45,7 @@ Cadastre em **cada** environment:
 | `DEPLOY_METHOD` | Variable | Para implantar | `webhook` ou `ssh`. Vazio: o workflow só publica a imagem |
 | `DEPLOY_WEBHOOK_URL` | Secret | Método `webhook` | URL completa do webhook de deploy (cada aplicação e ambiente tem a sua) |
 | `DEPLOY_WEBHOOK_TOKEN` | Secret | Opcional | Token enviado como `Authorization: Bearer` (no Coolify, o token de API com permissão *Deploy*) |
-| `DEPLOY_WEBHOOK_METHOD` | Variable | Opcional | Método HTTP do webhook (padrão `POST`; o Coolify usa `GET`) |
+| `DEPLOY_WEBHOOK_METHOD` | Variable | Opcional | Método HTTP do webhook (padrão `POST`, que é o que o Coolify atual exige; só defina para plataformas que usem outro) |
 | `DEPLOY_VERIFY_DELAY` | Variable | Opcional | Segundos de espera antes de verificar `/ready` depois do deploy (padrão `30`) |
 | `DEPLOY_SSH_HOST` | Secret | Método `ssh` | Servidor de destino |
 | `DEPLOY_SSH_USER` | Secret | Método `ssh` | Usuário SSH |
@@ -86,7 +86,7 @@ O workflow chama a URL configurada depois de publicar a imagem. Serve a qualquer
 
    A imagem precisa **já existir no GHCR** (rode o `deploy.yml` antes, com um merge na `main` ou manualmente). Depois copie para a aplicação nova as variáveis de ambiente (`DB_*`, `JWT_SECRET`, `CORS_ORIGIN`, `PORT`...) e o domínio da aplicação antiga.
 5. **Deploy automático desligado** (*manual deployments only*): a implantação deve ocorrer só pelo webhook, depois do CI verde.
-6. **Copie o webhook de cada aplicação** para o secret `DEPLOY_WEBHOOK_URL` do environment correspondente. O formato é `GET https://<seu-coolify>/api/v1/deploy?uuid=<uuid-da-aplicacao>&force=false`, então defina `DEPLOY_WEBHOOK_METHOD=GET` e `DEPLOY_METHOD=webhook`.
+6. **Copie o webhook de cada aplicação** para o secret `DEPLOY_WEBHOOK_URL` do environment correspondente. O formato é `https://<seu-coolify>/api/v1/deploy?uuid=<uuid-da-aplicacao>&force=false`, e o método é **`POST`** (o padrão do workflow, então não é preciso definir `DEPLOY_WEBHOOK_METHOD`). Versões antigas do Coolify aceitavam `GET`; se a sua responder `405` com `This endpoint has changed to a POST request`, o método está errado. Defina `DEPLOY_METHOD=webhook`.
 7. **Health check:** ative o health check da aplicação com o caminho `/health` (a própria imagem também declara um `HEALTHCHECK`).
 
 O mesmo token de API serve para todas as aplicações; só a URL (com o `uuid`) muda por aplicação e ambiente.
@@ -171,6 +171,7 @@ curl http://localhost:3000/ready
 | `Qualidade` falha com `Merge conflict marker` | Um merge foi commitado com conflito não resolvido |
 | `Testes` falham no CI mas passam local | O CI usa um PostgreSQL novo; confira migrations e variáveis `DB_*` |
 | `Publicar imagem` falha ao enviar | O repositório precisa da permissão de escrita em pacotes (`packages: write` já está no workflow) |
+| `Implantar por webhook` falha com `405` | Método HTTP errado. O log mostra o cabeçalho `Allow` e a resposta do servidor; o Coolify atual exige `POST` (remova ou ajuste `DEPLOY_WEBHOOK_METHOD`) |
 | `Implantar` avisa que `DEPLOY_METHOD` não está definido | O environment ainda não foi configurado; a imagem foi publicada, mas nada foi implantado |
 | `Implantar` avisa que `DEPLOY_METHOD` não está definido, mas ele foi cadastrado | Foi criado como *secret* em vez de *variable* no environment |
 | Coolify falha com `error from registry: denied` | A VPS não está autenticada no `ghcr.io`: rode `docker login ghcr.io` na VPS com um token clássico `read:packages` (autorizado para a organização, se houver SSO) e reimplante |
