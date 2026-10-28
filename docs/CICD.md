@@ -29,6 +29,22 @@ Toda publicação também recebe a tag `sha-<commit curto>`, que identifica exat
 
 O fluxo de branches segue o [GitLab Flow](GITFLOW.md): as features entram na `main` por Pull Request e a `main` é promovida para a `prod`. No dia a dia, os desenvolvedores usam o `.env` local apontando para o banco de homologação.
 
+### Como o pipeline escolhe o ambiente
+
+O `ci.yml` valida o código do mesmo jeito sempre. Quem separa homologação de produção é o `deploy.yml`, e só pela **branch que recebeu o push**. O passo *Definir o ambiente de destino* (job `publicar`) decide o nome do ambiente, e esse nome é usado em três lugares:
+
+1. **A tag da imagem** (passo *Definir nome e tags da imagem*): `homologacao`, ou `producao` e `latest`, mais `sha-<commit>`.
+2. **O GitHub Environment** do job `implantar`, que fornece as variáveis e os secrets daquele ambiente (a URL do webhook de produção é outra, por exemplo).
+3. **O `API_BASE_URL`** consultado pelo job `verificar`.
+
+A tag fica **na imagem, no GHCR**: *github.com/orgs/VerdeAr/packages → backend* lista as tags. Cada aplicação do Coolify (ou o `docker-compose.yml` do servidor) diz qual tag baixar, e é isso que liga a imagem publicada ao ambiente certo.
+
+```
+PR ────────────────▶ ci.yml (igual para todos)
+merge na main ─────▶ deploy.yml ─▶ imagem :homologacao ─▶ app de homologação
+merge na prod ─────▶ deploy.yml ─▶ imagem :producao ────▶ app de produção
+```
+
 Para publicar manualmente em um ambiente, use *Actions → Deploy → Run workflow* e escolha o ambiente.
 
 ## 3. Configuração no GitHub

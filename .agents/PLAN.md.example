@@ -1,8 +1,9 @@
 # PLAN — Modelo de Planejamento de Tarefa
 
 > Modelo do plano de execução exigido pelo protocolo em `.agents/AGENTS.md`.
-> Para cada nova tarefa, preencha este arquivo (ou copie a estrutura) **antes** de alterar qualquer código e só avance após a validação do desenvolvedor.
+> **Como usar:** copie este arquivo para `.agents/PLAN.md` (que é ignorado pelo Git) e preencha-o para cada nova tarefa, **antes** de alterar qualquer código. Só avance após a validação do desenvolvedor.
 > Regras do plano: uma subtarefa por vez, verificação (`tsc --noEmit` e `npm run check`) antes de cada pausa, e nenhum comando de escrita no Git executado pela IA.
+> Este modelo (`PLAN.md.example`) é versionado e deve permanecer em branco.
 
 ---
 
