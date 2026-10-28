@@ -1,7 +1,7 @@
 # =============================================================
 # Stage 1 — Builder: instala dependências e compila TypeScript
 # =============================================================
-FROM node:22-alpine AS builder
+FROM node:26-alpine AS builder
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ RUN npm run build
 # =============================================================
 # Stage 2 — Runner: imagem enxuta apenas com o necessário
 # =============================================================
-FROM node:22-alpine AS runner
+FROM node:26-alpine AS runner
 
 WORKDIR /app
 
