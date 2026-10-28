@@ -36,6 +36,15 @@ API RESTful do **VerdeAr**, um marketplace que conecta produtores familiares e o
 - Node.js 22 ou superior (o CI e a imagem Docker usam o Node 26)
 - PostgreSQL rodando localmente ou em container
 
+## Ambientes
+
+| Ambiente | Branch | API | Documentação (Swagger) | Saúde |
+|---|---|---|---|---|
+| **Homologação** | `main` | https://api-verdear-dev.pedmesa.com.br | [/docs](https://api-verdear-dev.pedmesa.com.br/docs) | [/ready](https://api-verdear-dev.pedmesa.com.br/ready) |
+| **Produção** | `prod` | _a definir_ | _a definir_ | _a definir_ |
+
+O GitHub também lista os ambientes em **Deployments**, na lateral da página do repositório, com o endereço e a data do último deploy. Como o pipeline publica e implanta cada ambiente, veja [docs/CICD.md](docs/CICD.md).
+
 ## Como executar
 
 ```bash
