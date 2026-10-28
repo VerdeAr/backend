@@ -88,11 +88,25 @@ jobs:
     name: Implantar
     needs: publicar
     runs-on: ubuntu-latest
-    environment: ${{ needs.publicar.outputs.ambiente }}
+    environment:
+      name: ${{ needs.publicar.outputs.ambiente }}
+      # Endereço exibido em "Deployments" do GitHub (documentação da API do ambiente)
+      url: ${{ steps.endereco.outputs.url }}
     concurrency:
       group: deploy-${{ needs.publicar.outputs.ambiente }}
       cancel-in-progress: false
     steps:
+      - name: Definir o endereço do ambiente
+        id: endereco
+        env:
+          BASE_URL: ${{ vars.API_BASE_URL }}
+        run: |
+          if [ -n "$BASE_URL" ]; then
+            echo "url=${BASE_URL%/}/docs" >> "$GITHUB_OUTPUT"
+          else
+            echo "url=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Implantar por webhook
         if: vars.DEPLOY_METHOD == 'webhook'
         env:

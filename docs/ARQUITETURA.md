@@ -28,7 +28,7 @@ Modelado, mas **sem endpoints** hoje: `Shipping` (frete por bairro). A comunica�
 
 | Camada | Tecnologia |
 |---|---|
-| Runtime | Node.js (imagem Docker `node:22-alpine`) + npm |
+| Runtime | Node.js 26 (imagem Docker `node:26-alpine` e CI) + npm |
 | Linguagem | TypeScript em modo `strict` (alias `@/*` para `src/*`) |
 | Framework HTTP | Express 5 |
 | Banco de dados | PostgreSQL (extensão `uuid-ossp`, chaves primárias UUID) |
@@ -245,7 +245,7 @@ Executado em uma única transação (`SaleService.checkout`):
 ## 12. Setup local e execução
 
 ### Pré-requisitos
-- Node.js 20 ou superior
+- Node.js 22 ou superior (o CI e a imagem Docker usam o Node 26)
 - PostgreSQL local ou em container
 
 ### Passos

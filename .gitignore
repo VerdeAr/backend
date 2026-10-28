@@ -5,3 +5,4 @@ mcp_config.json
 dist
 .env.test
 coverage
+.agents/PLAN.md
