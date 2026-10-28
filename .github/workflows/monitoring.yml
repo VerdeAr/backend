@@ -1,0 +1,35 @@
+name: Monitoramento
+
+# Verifica a cada 15 minutos se a API publicada responde em /ready (que também confere o
+# banco de dados). Roda para homologação e produção; cada ambiente usa a sua variável
+# API_BASE_URL. Falha quando o endpoint não responde, o que notifica os responsáveis.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health-check:
+    name: Verificar ${{ matrix.ambiente }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ambiente: [homologacao, producao]
+    environment: ${{ matrix.ambiente }}
+    steps:
+      - name: Verificar a aplicação publicada
+        env:
+          BASE_URL: ${{ vars.API_BASE_URL }}
+        run: |
+          if [ -z "$BASE_URL" ]; then
+            echo "::warning::API_BASE_URL não está definida no ambiente ${{ matrix.ambiente }}: verificação ignorada."
+            exit 0
+          fi
+          curl --fail --silent --show-error --max-time 20 \
+            --retry 3 --retry-delay 5 --retry-all-errors \
+            "${BASE_URL%/}/ready"
+          echo
