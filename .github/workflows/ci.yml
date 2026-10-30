@@ -1,0 +1,110 @@
+name: CI
+
+# Qualidade e testes. Roda em todo Pull Request e também é chamado pelo deploy.yml
+# (workflow_call), que só publica depois de este pipeline passar.
+on:
+  pull_request:
+    branches: [main, prod]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  qualidade:
+    name: Qualidade
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v7
+
+      - name: Configurar o Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Verificar tipos e lint (npm run check)
+        run: npm run check
+
+      - name: Compilar (npm run build)
+        run: npm run build
+
+  testes:
+    name: Testes
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: verdear_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d verdear_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      PORT: 3001
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_NAME: verdear_test
+      JWT_SECRET: segredo-somente-para-ci
+      CORS_ORIGIN: http://localhost:5173
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v7
+
+      - name: Configurar o Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Rodar os testes de integração (npm test)
+        # As migrations e o seed rodam no setup global da suíte
+        run: npm test
+
+  commits:
+    name: Commits
+    # O Dependabot gera mensagens fora do padrão do projeto
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o código com o histórico
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Configurar o Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Validar as mensagens de commit do PR (commitlint)
+        run: >-
+          npx commitlint
+          --from ${{ github.event.pull_request.base.sha }}
+          --to ${{ github.event.pull_request.head.sha }}
+          --verbose

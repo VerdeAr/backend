@@ -1,3 +1,4 @@
+import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
 import swaggerUi from "swagger-ui-express";
@@ -24,9 +25,14 @@ app.use(
 );
 
 app.use(express.json());
+app.use(cookieParser());
 app.use(loggingMiddleware);
 
+// Documentação: interface em /docs e especificação OpenAPI em /docs.json
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDoc));
+app.get("/docs.json", (_req, res) => {
+	res.json(swaggerDoc);
+});
 app.use(router);
 app.use(errorHandler);
 

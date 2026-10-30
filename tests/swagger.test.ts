@@ -1,0 +1,57 @@
+import SwaggerParser from "@apidevtools/swagger-parser";
+import request from "supertest";
+import { describe, expect, it } from "vitest";
+import { app } from "@/app";
+import { swaggerDoc } from "@/config/swagger";
+import { collectApiRoutes, collectDocumentedRoutes } from "./helpers/routes";
+
+describe("documentação Swagger", () => {
+	it("o documento é um OpenAPI válido", async () => {
+		// O parser altera o objeto recebido, então valida uma cópia
+		const document = JSON.parse(JSON.stringify(swaggerDoc));
+
+		await expect(SwaggerParser.validate(document)).resolves.toBeDefined();
+	});
+
+	it("a interface do Swagger responde em /docs", async () => {
+		const response = await request(app).get("/docs/");
+
+		expect(response.status).toBe(200);
+		expect(response.type).toBe("text/html");
+	});
+
+	it("serve a especificação OpenAPI em /docs.json", async () => {
+		const response = await request(app).get("/docs.json");
+
+		expect(response.status).toBe(200);
+		expect(response.body.openapi).toBe("3.0.0");
+		expect(Object.keys(response.body.paths).length).toBeGreaterThan(0);
+	});
+
+	it("mantém uma única rota de documentação (sem /api-docs)", async () => {
+		const ui = await request(app).get("/api-docs/");
+		const json = await request(app).get("/api-docs.json");
+
+		expect(ui.status).toBe(404);
+		expect(json.status).toBe(404);
+	});
+
+	it("não documenta rotas que não existem mais", () => {
+		const real = new Set(collectApiRoutes());
+		const documented = collectDocumentedRoutes(swaggerDoc.paths);
+
+		const stale = documented.filter((route) => !real.has(route));
+
+		expect(stale).toEqual([]);
+	});
+
+	it("documenta todas as rotas existentes", () => {
+		const documented = new Set(collectDocumentedRoutes(swaggerDoc.paths));
+
+		const undocumented = collectApiRoutes().filter(
+			(route) => !documented.has(route),
+		);
+
+		expect(undocumented).toEqual([]);
+	});
+});
