@@ -37,8 +37,10 @@ Modelado, mas **sem endpoints** hoje: `Shipping` (frete por bairro). A comunica�
 | Validação | Zod 4, com DTOs inferidos por `z.infer` e `cpf-cnpj-validator` |
 | Documentação | `swagger-ui-express` com especificação em `src/config/swagger.ts` |
 | Qualidade | Biome (lint e formatação) |
+| Testes | Vitest + Supertest (integração, contra um PostgreSQL de testes) |
 | Git hooks | Husky + Commitlint (`@commitlint/config-conventional`) |
-| Container | Docker multi-stage (`builder` e `runner`) |
+| Container | Docker multi-stage (`builder` e `runner`), com `HEALTHCHECK` em `/ready` |
+| CI/CD | GitHub Actions, imagem no GHCR e Dependabot. Ver [CICD.md](CICD.md) |
 | Configuração | `dotenv` |
 
 ---
@@ -48,7 +50,7 @@ Modelado, mas **sem endpoints** hoje: `Shipping` (frete por bairro). A comunica�
 ```mermaid
 flowchart LR
     U[Navegador] --> F[Frontend<br/>React SPA + Nginx]
-    F -- "HTTP/JSON<br/>Bearer JWT" --> A[Backend<br/>Express 5]
+    F -- "HTTP/JSON<br/>cookie HTTP-Only (JWT)" --> A[Backend<br/>Express 5]
     A -- "TypeORM" --> D[(PostgreSQL)]
     A -. "/docs" .-> S[Swagger UI]
 ```
@@ -219,6 +221,15 @@ Executado em uma única transação (`SaleService.checkout`):
 - A validação roda em dois estilos: o middleware `validate(schema)` (auth e pessoa) e `schema.parse` dentro dos controllers (produtos, carrinho, vendas, avaliações). Em ambos, o `ZodError` cai no `errorHandler`.
 - `loggingMiddleware` registra cada requisição como `[HTTP] MÉTODO URL STATUS - Nms`, com cor por faixa de status.
 
+### Saúde e monitoramento
+
+| Rota | Uso | Resposta |
+|---|---|---|
+| `GET /health` | Liveness: o processo está de pé. Não consulta o banco. | `200` com `{ status: "ok", uptime }` |
+| `GET /ready` | Readiness: a API consegue atender, o que inclui o banco. | `200` com `{ status: "ready", database: "up" }`, ou `503` com `{ status: "unavailable", database: "down" }` |
+
+O `HEALTHCHECK` do `Dockerfile` consulta `/ready`, e o `monitoring.yml` faz o mesmo a cada 15 minutos em cada ambiente; se a API ou o banco ficarem fora do ar, o workflow falha e o GitHub notifica os responsáveis.
+
 ---
 
 ## 10. Diretrizes arquiteturais
@@ -228,14 +239,13 @@ Executado em uma única transação (`SaleService.checkout`):
 3. **Type safety:** `any` é vetado; DTOs vêm dos schemas Zod.
 4. **Idioma:** domínio e rotas em português (`/produtos`, `/carrinho`); código e mensagens de erro em português do Brasil.
 5. **Segredos:** nada de credenciais no código; tudo via `.env`.
-6. **Qualidade:** `npm run check` (`tsc --noEmit` + Biome com `--error-on-warnings`) deve passar antes de abrir PR. O hook `pre-commit` roda o Biome em `src/` e o `commit-msg` valida o padrão de commits.
+6. **Qualidade:** `npm run check` (`tsc --noEmit` + Biome com `--error-on-warnings`) e `npm test` (testes de integração) devem passar antes de abrir PR; o CI repete as duas verificações e bloqueia o merge se falharem. O hook `pre-commit` roda o Biome em `src/` e o `commit-msg` valida o padrão de commits.
 7. **Swagger sempre em dia:** todo endpoint novo ou alterado é documentado em `src/config/swagger.ts`. O teste `tests/swagger.test.ts` valida o documento OpenAPI, confere que `/docs` e `/docs.json` respondem (e que `/api-docs` não existe) e **falha se alguma rota existente ficar sem documentação** ou se o Swagger citar uma rota que não existe mais.
 
 ---
 
 ## 11. Limitações conhecidas
 
-- **Sem testes automatizados** e sem pipeline de CI neste repositório.
 - **Sem refresh token** e sem revogação de token no logout.
 - **Frete por bairro** está modelado, mas sem API.
 - **`DB_*` e `JWT_SECRET`** usam `process.env` sem validação de presença na inicialização; valores ausentes só falham em tempo de execução. Em `server.ts`, uma falha ao conectar no banco apenas registra o erro, sem encerrar o processo.
@@ -262,8 +272,17 @@ Documentação interativa: `http://localhost:3000/docs` (especificação OpenAPI
 ### Produção com Docker
 O `Dockerfile` compila o TypeScript no estágio `builder` e copia apenas `dist/` e as dependências de produção para o estágio `runner`. O `entrypoint.sh` executa `migration:run` antes de iniciar `node dist/server.js`. O seed **não** roda automaticamente: execute `npm run seed` uma vez em cada ambiente novo.
 
+### Ambientes
+
+| Ambiente | Branch | API | Documentação (Swagger) | Saúde |
+|---|---|---|---|---|
+| Homologação | `main` | https://api-verdear-dev.pedmesa.com.br | `/docs` | `/ready` |
+| Produção | `prod` | https://api-verdear.pedmesa.com.br | `/docs` | `/ready` |
+
+O merge na `main` publica e implanta a homologação; o merge na `prod` faz o mesmo na produção. Os dois só ocorrem com o CI verde. A imagem não carrega configuração de ambiente: banco, segredos e CORS vêm das variáveis do servidor de cada ambiente. Os detalhes estão em [CICD.md](CICD.md).
+
 ---
 
 ## 13. Fluxo de trabalho
 
-Branches seguem o GitLab Flow (`main` como fonte única; ramos de ambiente recebem código somente a partir do `main`), descrito em [GITFLOW.md](GITFLOW.md), e cada branch usa o ID da própria tarefa (`<tipo>/VER-<ID>-<descricao-curta-em-portugues>`). Commits seguem Conventional Commits, em português, com o mesmo ID e até 100 caracteres (`feat(modulo): [VER-105] cria validacao de pagamento`). O protocolo completo de trabalho com IA está em `.agents/AGENTS.md`. O Pull Request precisa de revisão por pares (os responsáveis estão no arquivo `CODEOWNERS`) e de `npm run check` passando. O andamento das tarefas está em [ANDAMENTO.md](ANDAMENTO.md).
+Branches seguem o GitLab Flow (`main` como fonte única; ramos de ambiente recebem código somente a partir do `main`), descrito em [GITFLOW.md](GITFLOW.md), e cada branch usa o ID da própria tarefa (`<tipo>/VER-<ID>-<descricao-curta-em-portugues>`). Commits seguem Conventional Commits, em português, com o mesmo ID e até 100 caracteres (`feat(modulo): [VER-105] cria validacao de pagamento`). O protocolo completo de trabalho com IA está em `.agents/AGENTS.md`. O Pull Request precisa de revisão por pares (os responsáveis estão no arquivo `CODEOWNERS`) e do CI verde (Qualidade, Testes e Commits, descritos em [CICD.md](CICD.md)). O andamento das tarefas está em [ANDAMENTO.md](ANDAMENTO.md).

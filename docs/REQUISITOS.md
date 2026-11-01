@@ -151,13 +151,14 @@ Requisitos do produto, com o estado de cada um. O VerdeAr é um marketplace que 
 | RNF-14 | Manutenibilidade | TypeScript em modo `strict`, sem `any`, com Biome; `npm run check` deve passar antes do Pull Request. | Implementado |
 | RNF-15 | Manutenibilidade | Camadas separadas no backend (rota, controller, service, repository) e componentes por domínio no frontend. | Implementado |
 | RNF-16 | Manutenibilidade | Commits no padrão Conventional Commits com o ID da tarefa, validados por Commitlint e Husky. | Implementado |
-| RNF-17 | Documentação | A API é documentada em OpenAPI/Swagger (`/docs`, `/api-docs`, `/api-docs.json`). | Parcial (faltam logout e avaliações) |
-| RNF-18 | Testabilidade | Há testes automatizados do caminho feliz do fluxo principal, executados no pipeline e com instrução de execução local. | Planejado (VER-17) |
-| RNF-19 | Implantação | Backend e frontend rodam em containers Docker na VPS; o backend aplica as migrations ao iniciar. | Implementado (VER-45) |
+| RNF-17 | Documentação | A API é documentada em OpenAPI/Swagger, com interface em `/docs` e especificação em `/docs.json`, cobrindo todas as rotas ativas. | Implementado (VER-101) |
+| RNF-18 | Testabilidade | Há testes automatizados do caminho feliz do fluxo principal, executados no pipeline e com instrução de execução local. | Implementado (VER-17): testes de integração (VER-99) e pipeline de CI no GitHub Actions (VER-100), que bloqueia o merge quando falham |
+| RNF-19 | Implantação | Backend e frontend rodam em containers Docker na VPS, em dois ambientes (homologação, na `main`, e produção, na `prod`). A imagem só é publicada e implantada com o CI verde; o backend aplica as migrations ao iniciar. | Implementado (VER-45, VER-100, VER-102 e VER-105) |
 | RNF-20 | Implantação | O schema do banco evolui apenas por migrations versionadas. | Implementado |
 | RNF-21 | Observabilidade | Cada requisição HTTP é registrada com método, URL, status e duração. | Implementado |
 | RNF-22 | Idioma | Interface, mensagens de erro, comentários e documentação em português do Brasil. | Implementado |
 | RNF-23 | Custo | Serviços externos devem caber nas cotas gratuitas: Resend (3.000 e-mails/mês), Cloudflare R2 (10 GB), ViaCEP, OpenRouteService e OpenStreetMap. | Planejado |
+| RNF-24 | Observabilidade | A API expõe `GET /health` e `GET /ready` (este confere o banco). A disponibilidade da aplicação e da API de cada ambiente é verificada a cada 15 minutos por um workflow agendado, que falha e notifica quando algo está fora do ar. | Implementado (VER-98, VER-102 e VER-105) |
 
 ---
 

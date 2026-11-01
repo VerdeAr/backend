@@ -34,7 +34,7 @@ Ao receber uma demanda ou chave de tarefa (ex.: `VER-44`):
 ```mermaid
 flowchart TD
     A["1. Identificar a subtarefa no PLAN.md"] --> B["2. Executar o código da subtarefa única"]
-    B --> C["3. Verificar integridade (tsc e biome)"]
+    B --> C["3. Verificar integridade (npm run check e npm test)"]
     C --> D["4. PAUSA OBRIGATÓRIA e solicitar validação humana"]
     D --> E["5. Propor o bloco de commit"]
     E --> F{"Desenvolvedor aprovou?"}
@@ -43,7 +43,7 @@ flowchart TD
 ```
 
 1. **Uma subtarefa por vez.** É proibido implementar várias subtarefas em um único prompt.
-2. **Verificação prévia obrigatória.** Antes de pedir validação, os arquivos alterados devem passar sem erros em `tsc --noEmit` e em `npm run check` (Biome com `--error-on-warnings`).
+2. **Verificação prévia obrigatória.** Antes de pedir validação, os arquivos alterados devem passar sem erros em `tsc --noEmit`, em `npm run check` (Biome com `--error-on-warnings`) e em `npm test` (Vitest + Supertest; exige o banco de testes, ver o README).
 3. **Pausa e solicitação de validação.** Apresente:
    - um resumo claro e conciso das alterações;
    - os arquivos modificados e criados;
