@@ -30,6 +30,7 @@ API RESTful do **VerdeAr**, um marketplace que conecta produtores familiares e o
 | Testes | Vitest + Supertest, com PostgreSQL de testes em contêiner |
 | Git hooks | Husky + Commitlint (Conventional Commits) |
 | Container | Docker multi-stage (Node Alpine) |
+| CI/CD | GitHub Actions, imagem no GHCR e Dependabot |
 
 ## Pré-requisitos
 
@@ -41,7 +42,7 @@ API RESTful do **VerdeAr**, um marketplace que conecta produtores familiares e o
 | Ambiente | Branch | API | Documentação (Swagger) | Saúde |
 |---|---|---|---|---|
 | **Homologação** | `main` | https://api-verdear-dev.pedmesa.com.br | [/docs](https://api-verdear-dev.pedmesa.com.br/docs) | [/ready](https://api-verdear-dev.pedmesa.com.br/ready) |
-| **Produção** | `prod` | _a definir_ | _a definir_ | _a definir_ |
+| **Produção** | `prod` | https://api-verdear.pedmesa.com.br | [/docs](https://api-verdear.pedmesa.com.br/docs) | [/ready](https://api-verdear.pedmesa.com.br/ready) |
 
 O GitHub também lista os ambientes em **Deployments**, na lateral da página do repositório, com o endereço e a data do último deploy. Como o pipeline publica e implanta cada ambiente, veja [docs/CICD.md](docs/CICD.md).
 
@@ -147,7 +148,19 @@ docker build -t verdear-backend .
 docker run -p 3000:3000 --env-file .env verdear-backend
 ```
 
-O `entrypoint.sh` executa as migrations automaticamente antes de iniciar o servidor. O `DB_HOST` precisa ser alcançável de dentro do container.
+O `entrypoint.sh` executa as migrations automaticamente antes de iniciar o servidor. O `DB_HOST` precisa ser alcançável de dentro do container. A imagem tem um `HEALTHCHECK` que consulta `/ready`.
+
+## CI/CD
+
+Os workflows ficam em `.github/workflows/`:
+
+| Workflow | O que faz |
+|---|---|
+| `ci.yml` | Em todo Pull Request para `main` ou `prod`: **Qualidade** (`npm run check` e `npm run build`), **Testes** (integração com PostgreSQL) e **Commits** (Commitlint do PR) |
+| `deploy.yml` | Push na `main` (homologação) ou na `prod` (produção): roda o CI, publica a imagem no GHCR, implanta (`webhook` ou `ssh`) e confere `/ready` |
+| `monitoring.yml` | A cada 15 minutos, consulta `/ready` de cada ambiente |
+
+O Dependabot abre PRs de atualização de npm, GitHub Actions e Docker. A configuração dos Environments, as variáveis, o rollback e os problemas comuns estão em [docs/CICD.md](docs/CICD.md).
 
 ## Estrutura do projeto
 
@@ -193,8 +206,11 @@ Detalhes de parâmetros e respostas estão no Swagger.
 | `/carrinho` | Carrinho persistente | Logado |
 | `/vendas` | Checkout e histórico de compras | Logado (alterar status: Vendedor) |
 | `/avaliacoes` | Avaliações de pedidos | Logado |
+| `/chats` | Conversas e mensagens (o tempo real usa Socket.io) | Logado |
+| `/health` | Liveness: confirma que o processo responde, sem consultar o banco | Público |
+| `/ready` | Readiness: confere o banco (200 com banco no ar, 503 sem banco) | Público |
 
-Rotas autenticadas esperam `Authorization: Bearer <token>`.
+Rotas autenticadas leem o token do cookie `token` (HTTP-Only); o cabeçalho `Authorization: Bearer <token>` continua aceito para clientes de API.
 
 ## Regras de negócio principais
 
@@ -215,7 +231,7 @@ As regras completas (RN-01 a RN-53) estão no Notion, na página *Regras de Neg�
   feat(modulo): [VER-105] descricao concisa da alteracao
   ```
   Redigidos em português, no imperativo, com no máximo 100 caracteres. Prefixos: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`.
-- **Pull Request:** revisado por pares (responsáveis no `CODEOWNERS`) e com `npm run check` passando.
+- **Pull Request:** revisado por pares (responsáveis no `CODEOWNERS`) e com o CI verde (Qualidade, Testes e Commits). Rode `npm run check` e `npm test` localmente antes de abrir o PR.
 - **Segurança:** nunca comite tokens, senhas ou URLs fixas; use o `.env`.
 - **Definition of Done:** critérios de aceite do Jira atendidos, commits no padrão, sem credenciais expostas, testes validados pelo QA com evidências, subtarefas concluídas e PR aprovado.
 
@@ -225,3 +241,4 @@ As regras completas (RN-01 a RN-53) estão no Notion, na página *Regras de Neg�
 - [docs/REQUISITOS.md](docs/REQUISITOS.md) — requisitos funcionais e não funcionais, com o estado de cada um
 - [docs/ANDAMENTO.md](docs/ANDAMENTO.md) — o que já foi entregue, o que está em andamento e o que está planejado
 - [docs/GITFLOW.md](docs/GITFLOW.md) — fluxo de versionamento
+- [docs/CICD.md](docs/CICD.md) — pipelines de CI, deploy e monitoramento, e como configurar o GitHub
