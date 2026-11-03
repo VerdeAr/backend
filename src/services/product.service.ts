@@ -16,11 +16,12 @@ export class ProductService {
 	// ==================== Catálogo Público ====================
 
 	async listPublic(query: ProductFilterQuery) {
-		const categoryId = query.categoriaId || query.category_id;
+		const categoryId =
+			query.categoria || query.categoriaId || query.category_id;
 		const sellerId = query.vendedorId || query.seller_id;
 		const search = query.termo || query.search || query.q;
 		const availableOnly = query.disponivel ?? true;
-		const page = query.page ?? 1;
+		const page = query.pagina ?? query.page ?? 1;
 		const limit = query.limit ?? 12;
 		const orderBy = query.orderBy ?? "created_at";
 		const orderDir = query.orderDir ?? "DESC";

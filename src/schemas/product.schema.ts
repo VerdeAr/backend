@@ -1,13 +1,24 @@
 import { z } from "zod";
 
+const emptyStringToUndefinedUuid = z.preprocess(
+	(val) => (typeof val === "string" && val.trim() === "" ? undefined : val),
+	z.string().uuid("ID inválido").optional(),
+);
+
+const emptyStringToUndefinedString = z.preprocess(
+	(val) => (typeof val === "string" && val.trim() === "" ? undefined : val),
+	z.string().optional(),
+);
+
 export const productFilterQuerySchema = z.object({
-	categoriaId: z.string().uuid("ID de categoria inválido").optional(),
-	category_id: z.string().uuid("ID de categoria inválido").optional(),
-	vendedorId: z.string().uuid("ID de vendedor inválido").optional(),
-	seller_id: z.string().uuid("ID de vendedor inválido").optional(),
-	termo: z.string().optional(),
-	search: z.string().optional(),
-	q: z.string().optional(),
+	categoria: emptyStringToUndefinedUuid,
+	categoriaId: emptyStringToUndefinedUuid,
+	category_id: emptyStringToUndefinedUuid,
+	vendedorId: emptyStringToUndefinedUuid,
+	seller_id: emptyStringToUndefinedUuid,
+	termo: emptyStringToUndefinedString,
+	search: emptyStringToUndefinedString,
+	q: emptyStringToUndefinedString,
 	disponivel: z
 		.union([z.boolean(), z.enum(["true", "false", "1", "0"])])
 		.optional()
@@ -15,11 +26,19 @@ export const productFilterQuerySchema = z.object({
 			if (val === undefined) return true;
 			return val === true || val === "true" || val === "1";
 		}),
+	pagina: z
+		.union([z.number(), z.string()])
+		.optional()
+		.transform((val) => {
+			if (!val) return undefined;
+			const parsed = Number(val);
+			return Number.isNaN(parsed) || parsed < 1 ? 1 : parsed;
+		}),
 	page: z
 		.union([z.number(), z.string()])
 		.optional()
 		.transform((val) => {
-			if (!val) return 1;
+			if (!val) return undefined;
 			const parsed = Number(val);
 			return Number.isNaN(parsed) || parsed < 1 ? 1 : parsed;
 		}),
