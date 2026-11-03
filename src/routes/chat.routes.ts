@@ -1,11 +1,13 @@
 import { Router } from "express";
 import { ChatController } from "@/controllers/chat.controller";
 import { ensureAuthenticated } from "@/middlewares/auth.middleware";
+import { cacheControl } from "@/middlewares/cache.middleware";
 
 const chatRoutes = Router();
 const chatController = new ChatController();
 
 chatRoutes.use(ensureAuthenticated);
+chatRoutes.use(cacheControl("private, no-cache"));
 
 chatRoutes.post("/iniciar", (req, res, next) =>
 	chatController.iniciar(req, res, next),

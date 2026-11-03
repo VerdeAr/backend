@@ -10,6 +10,16 @@ const emptyStringToUndefinedString = z.preprocess(
 	z.string().optional(),
 );
 
+const parsePositiveIntegerPage = z
+	.union([z.number(), z.string()])
+	.optional()
+	.transform((val) => {
+		if (val === undefined || val === null || val === "") return undefined;
+		const parsed = Number(val);
+		if (Number.isNaN(parsed) || parsed < 1) return 1;
+		return Math.floor(parsed);
+	});
+
 export const productFilterQuerySchema = z.object({
 	categoria: emptyStringToUndefinedUuid,
 	categoriaId: emptyStringToUndefinedUuid,
@@ -26,29 +36,17 @@ export const productFilterQuerySchema = z.object({
 			if (val === undefined) return true;
 			return val === true || val === "true" || val === "1";
 		}),
-	pagina: z
-		.union([z.number(), z.string()])
-		.optional()
-		.transform((val) => {
-			if (!val) return undefined;
-			const parsed = Number(val);
-			return Number.isNaN(parsed) || parsed < 1 ? 1 : parsed;
-		}),
-	page: z
-		.union([z.number(), z.string()])
-		.optional()
-		.transform((val) => {
-			if (!val) return undefined;
-			const parsed = Number(val);
-			return Number.isNaN(parsed) || parsed < 1 ? 1 : parsed;
-		}),
+	pagina: parsePositiveIntegerPage,
+	page: parsePositiveIntegerPage,
 	limit: z
 		.union([z.number(), z.string()])
 		.optional()
 		.transform((val) => {
-			if (!val) return 12;
+			if (val === undefined || val === null || val === "") return 12;
 			const parsed = Number(val);
-			return Number.isNaN(parsed) || parsed < 1 ? 12 : parsed;
+			if (Number.isNaN(parsed) || parsed < 1) return 12;
+			const integerLimit = Math.floor(parsed);
+			return Math.min(integerLimit, 100);
 		}),
 	orderBy: z.enum(["name", "price", "created_at"]).optional(),
 	orderDir: z

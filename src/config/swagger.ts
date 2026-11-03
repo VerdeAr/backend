@@ -1529,7 +1529,7 @@ export const swaggerDoc = {
 				summary: "Listar produtos públicos com filtros, busca e paginação",
 				description:
 					"Por padrão lista apenas produtos ativos e com estoque (`disponivel=true`). " +
-					"Os parâmetros `categoria`/`categoriaId`/`category_id`, `vendedorId`/`seller_id`, `pagina`/`page` e `termo`/`search`/`q` são sinônimos compatíveis com os data loaders.",
+					"Os parâmetros `categoria`, `category_id`, `seller_id`, `pagina`, `search` e `q` são aliases opcionais aceitos para compatibilidade e conveniência dos clientes.",
 				parameters: [
 					{
 						name: "termo",
@@ -1543,14 +1543,13 @@ export const swaggerDoc = {
 						in: "query",
 						schema: { type: "string", format: "uuid" },
 						description:
-							"Filtrar por categoria. Sinônimos: `categoria` e `category_id`",
+							"Filtrar por ID da categoria. Aliases opcionais: `categoria` e `category_id`",
 					},
 					{
 						name: "categoria",
 						in: "query",
 						schema: { type: "string", format: "uuid" },
-						description:
-							"Alias para `categoriaId` utilizado na URL do frontend",
+						description: "Alias opcional para `categoriaId`",
 					},
 					{
 						name: "vendedorId",
@@ -1569,19 +1568,25 @@ export const swaggerDoc = {
 						name: "page",
 						in: "query",
 						schema: { type: "integer", minimum: 1, default: 1 },
-						description: "Número da página. Sinônimo: `pagina`",
+						description:
+							"Número da página (inteiro positivo, mínimo 1). Alias opcional: `pagina`",
 					},
 					{
 						name: "pagina",
 						in: "query",
 						schema: { type: "integer", minimum: 1, default: 1 },
-						description: "Alias para `page` utilizado na URL do frontend",
+						description: "Alias opcional para `page`",
 					},
 					{
 						name: "limit",
 						in: "query",
-						schema: { type: "integer", minimum: 1, default: 12 },
-						description: "Itens por página",
+						schema: {
+							type: "integer",
+							minimum: 1,
+							maximum: 100,
+							default: 12,
+						},
+						description: "Itens por página (mínimo 1, máximo 100, padrão 12)",
 					},
 					{
 						name: "orderBy",
@@ -1606,6 +1611,13 @@ export const swaggerDoc = {
 				responses: {
 					200: {
 						description: "Produtos retornados com sucesso",
+						headers: {
+							"Cache-Control": {
+								schema: { type: "string", example: "no-cache" },
+								description:
+									"Exige revalidação condicional no servidor via ETag",
+							},
+						},
 						content: {
 							"application/json": {
 								schema: {
@@ -1639,6 +1651,13 @@ export const swaggerDoc = {
 				responses: {
 					200: {
 						description: "Detalhe do produto retornado com sucesso",
+						headers: {
+							"Cache-Control": {
+								schema: { type: "string", example: "no-cache" },
+								description:
+									"Exige revalidação condicional no servidor via ETag",
+							},
+						},
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ProductDetail" },
@@ -1665,6 +1684,12 @@ export const swaggerDoc = {
 				responses: {
 					200: {
 						description: "Lista de categorias retornada com sucesso",
+						headers: {
+							"Cache-Control": {
+								schema: { type: "string", example: "public, max-age=300" },
+								description: "Cache público de até 5 minutos",
+							},
+						},
 						content: {
 							"application/json": {
 								schema: {
@@ -1684,6 +1709,12 @@ export const swaggerDoc = {
 				responses: {
 					200: {
 						description: "Lista de unidades de medida retornada com sucesso",
+						headers: {
+							"Cache-Control": {
+								schema: { type: "string", example: "public, max-age=300" },
+								description: "Cache público de até 5 minutos",
+							},
+						},
 						content: {
 							"application/json": {
 								schema: {
@@ -1894,6 +1925,16 @@ export const swaggerDoc = {
 				responses: {
 					200: {
 						description: "Carrinho retornado com sucesso",
+						headers: {
+							"Cache-Control": {
+								schema: {
+									type: "string",
+									example: "private, no-cache",
+								},
+								description:
+									"Cache privado do usuário autenticado com revalidação condicional",
+							},
+						},
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/Cart" },

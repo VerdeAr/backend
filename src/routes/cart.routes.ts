@@ -1,12 +1,14 @@
 import { Router } from "express";
 import { CartController } from "@/controllers/cart.controller";
 import { ensureAuthenticated } from "@/middlewares/auth.middleware";
+import { cacheControl } from "@/middlewares/cache.middleware";
 
 const cartRoutes = Router();
 const cartController = new CartController();
 
-// Todas as operações de carrinho exigem autenticação do usuário
+// Todas as operações de carrinho exigem autenticação do usuário e não devem ser cacheadas publicamente
 cartRoutes.use(ensureAuthenticated);
+cartRoutes.use(cacheControl("private, no-cache"));
 
 cartRoutes.get("/", cartController.getCart);
 cartRoutes.post("/itens", cartController.addItem);
