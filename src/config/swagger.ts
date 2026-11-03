@@ -1529,7 +1529,7 @@ export const swaggerDoc = {
 				summary: "Listar produtos públicos com filtros, busca e paginação",
 				description:
 					"Por padrão lista apenas produtos ativos e com estoque (`disponivel=true`). " +
-					"Os parâmetros `categoriaId`/`category_id`, `vendedorId`/`seller_id` e `termo`/`search`/`q` são sinônimos.",
+					"Os parâmetros `categoria`/`categoriaId`/`category_id`, `vendedorId`/`seller_id`, `pagina`/`page` e `termo`/`search`/`q` são sinônimos compatíveis com os data loaders.",
 				parameters: [
 					{
 						name: "termo",
@@ -1542,7 +1542,15 @@ export const swaggerDoc = {
 						name: "categoriaId",
 						in: "query",
 						schema: { type: "string", format: "uuid" },
-						description: "Filtrar por categoria. Sinônimo: `category_id`",
+						description:
+							"Filtrar por categoria. Sinônimos: `categoria` e `category_id`",
+					},
+					{
+						name: "categoria",
+						in: "query",
+						schema: { type: "string", format: "uuid" },
+						description:
+							"Alias para `categoriaId` utilizado na URL do frontend",
 					},
 					{
 						name: "vendedorId",
@@ -1561,7 +1569,13 @@ export const swaggerDoc = {
 						name: "page",
 						in: "query",
 						schema: { type: "integer", minimum: 1, default: 1 },
-						description: "Número da página",
+						description: "Número da página. Sinônimo: `pagina`",
+					},
+					{
+						name: "pagina",
+						in: "query",
+						schema: { type: "integer", minimum: 1, default: 1 },
+						description: "Alias para `page` utilizado na URL do frontend",
 					},
 					{
 						name: "limit",
