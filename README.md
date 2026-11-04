@@ -10,7 +10,8 @@ API RESTful do **VerdeAr**, um marketplace que conecta produtores familiares e o
 - **Catálogo:** produtos, categorias e unidades de medida; busca pública paginada e CRUD restrito ao vendedor, com controle de estoque e status ativo/inativo (exclusão lógica).
 - **Carrinho persistente:** salvo no banco, com frete fixo configurado por cada vendedor e somado por produtor na modalidade Entrega.
 - **Checkout transacional (ACID):** venda, itens e pagamento em uma transação, com decremento de estoque e estorno no cancelamento.
-- **Pedidos do vendedor:** cada vendedor vê e gerencia apenas os pedidos que contêm seus produtos.
+- **Pedidos do vendedor:** cada vendedor vê e gerencia apenas os pedidos que contêm seus produtos, com página de detalhe, linha do tempo de status e o fluxo Recebido → Em Preparação → A Caminho → Concluído.
+- **Ajuste com consentimento:** o vendedor propõe ajuste de quantidade ou pesagem e o cliente aceita ou recusa; não há alteração unilateral.
 - **Avaliações:** nota de 1 a 5 e comentário opcional, apenas para pedidos finalizados.
 - **Documentação OpenAPI/Swagger** de todos os endpoints.
 
@@ -202,9 +203,9 @@ Detalhes de parâmetros e respostas estão no Swagger.
 | `/categorias` | Categorias | Público |
 | `/unidades-medida` | Unidades de medida | Público |
 | `/vendedor/produtos` | Catálogo do vendedor (CRUD) | Vendedor |
-| `/vendedor/pedidos` | Pedidos do vendedor | Vendedor |
+| `/vendedor/pedidos` | Pedidos do vendedor: lista, detalhe, mudança de status e proposta de ajuste | Vendedor |
 | `/carrinho` | Carrinho persistente | Logado |
-| `/vendas` | Checkout e histórico de compras | Logado (alterar status: Vendedor) |
+| `/vendas` | Checkout, histórico de compras e resposta ao ajuste | Logado (alterar status: Vendedor) |
 | `/avaliacoes` | Avaliações de pedidos | Logado |
 | `/chats` | Conversas e mensagens (o tempo real usa Socket.io) | Logado |
 | `/health` | Liveness: confirma que o processo responde, sem consultar o banco | Público |
@@ -220,7 +221,8 @@ As regras completas (RN-01 a RN-53) estão no Notion, na página *Regras de Neg�
 - Apenas vendedores gerenciam produtos, frete fixo e pedidos, e somente os próprios.
 - Estoque nunca é negativo; produtos inativos não aparecem na vitrine nem entram no carrinho.
 - O preço é gravado no momento da compra; frete só é cobrado na modalidade **Entrega** (em **Retirada** é R$ 0,00).
-- Pedidos nascem como `ABERTA` e só o vendedor os leva a `FINALIZADA` ou `CANCELADA` (estados terminais).
+- Pedidos nascem como `ABERTA` e só o vendedor os avança: `EM_PREPARACAO`, `A_CAMINHO` (só na Entrega) e `FINALIZADA`, ou `CANCELADA`. `FINALIZADA` e `CANCELADA` são terminais, e cancelar devolve o estoque.
+- O vendedor pode propor ajuste de quantidade ou pesagem em pedidos `ABERTA` ou `EM_PREPARACAO`. O pedido fica `AGUARDANDO_APROVACAO_CLIENTE` até o cliente responder: aceitar aplica os novos valores e volta ao status anterior; recusar cancela o pedido.
 - Só pedidos finalizados podem ser avaliados, uma vez, com nota de 1 a 5.
 
 ## Fluxo de contribuição
