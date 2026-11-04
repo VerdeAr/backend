@@ -10,8 +10,17 @@ export enum DeliveryType {
 
 export enum SaleStatus {
 	ABERTA = "ABERTA",
+	EM_PREPARACAO = "EM_PREPARACAO",
+	A_CAMINHO = "A_CAMINHO",
+	AGUARDANDO_APROVACAO_CLIENTE = "AGUARDANDO_APROVACAO_CLIENTE",
 	FINALIZADA = "FINALIZADA",
 	CANCELADA = "CANCELADA",
+}
+
+export enum SaleAdjustmentStatus {
+	PENDENTE = "PENDENTE",
+	ACEITO = "ACEITO",
+	RECUSADO = "RECUSADO",
 }
 
 export enum ChatStatus {

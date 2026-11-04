@@ -14,7 +14,10 @@ import { PaymentMethod } from "@/entities/PaymentMethod.js";
 import { Product } from "@/entities/Product.js";
 import { Review } from "@/entities/Review.js";
 import { Sale } from "@/entities/Sale.js";
+import { SaleAdjustment } from "@/entities/SaleAdjustment.js";
+import { SaleAdjustmentItem } from "@/entities/SaleAdjustmentItem.js";
 import { SaleProduct } from "@/entities/SaleProduct.js";
+import { SaleStatusHistory } from "@/entities/SaleStatusHistory.js";
 import { Seller } from "@/entities/Seller.js";
 import { Shipping } from "@/entities/Shipping.js";
 import { User } from "@/entities/User.js";
@@ -44,7 +47,10 @@ export const AppDataSource = new DataSource({
 		Product,
 		Review,
 		Sale,
+		SaleAdjustment,
+		SaleAdjustmentItem,
 		SaleProduct,
+		SaleStatusHistory,
 		Seller,
 		Shipping,
 		User,
