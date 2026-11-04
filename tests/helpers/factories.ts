@@ -126,3 +126,40 @@ export async function createProduct(
 
 	return { id: response.body.id, name: response.body.name };
 }
+
+export interface OrderLine {
+	productId: string;
+	quantity: number;
+}
+
+// Monta o carrinho do cliente e fecha o pedido, devolvendo o ID da venda criada
+export async function placeOrder(
+	customer: Client,
+	lines: OrderLine[],
+	deliveryType: "ENTREGA" | "RETIRADA" = "ENTREGA",
+	paymentMethod = "PIX",
+): Promise<string> {
+	for (const line of lines) {
+		const added = await customer
+			.post("/carrinho/itens")
+			.send({ product_id: line.productId, quantity: line.quantity });
+
+		if (added.status !== 200) {
+			throw new Error(
+				`Falha ao adicionar ao carrinho: ${added.status} ${JSON.stringify(added.body)}`,
+			);
+		}
+	}
+
+	const response = await customer
+		.post("/vendas/checkout")
+		.send({ delivery_type: deliveryType, payment_method: paymentMethod });
+
+	if (response.status !== 201) {
+		throw new Error(
+			`Falha no checkout: ${response.status} ${JSON.stringify(response.body)}`,
+		);
+	}
+
+	return response.body.id;
+}
