@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import {
 	checkoutSchema,
+	proposeAdjustmentSchema,
 	saleIdParamSchema,
 	sellerOrdersQuerySchema,
 	updateSaleStatusSchema,
@@ -77,6 +78,22 @@ export class SaleController {
 			const { id } = saleIdParamSchema.parse(req.params);
 			const order = await saleService.getSellerOrderDetail(sellerUserId, id);
 			return res.status(200).json(order);
+		} catch (error) {
+			next(error);
+		}
+	}
+
+	/**
+	 * POST /vendedor/pedidos/:id/propor-ajuste
+	 * Vendedor propõe ajuste de quantidade ou pesagem; o pedido aguarda a aprovação do cliente.
+	 */
+	async proposeAdjustment(req: Request, res: Response, next: NextFunction) {
+		try {
+			const sellerUserId = req.user!.id;
+			const { id } = saleIdParamSchema.parse(req.params);
+			const data = proposeAdjustmentSchema.parse(req.body);
+			const order = await saleService.proposeAdjustment(sellerUserId, id, data);
+			return res.status(201).json(order);
 		} catch (error) {
 			next(error);
 		}

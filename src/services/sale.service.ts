@@ -9,20 +9,27 @@ import {
 	Product,
 	Sale,
 	SaleAdjustment,
+	SaleAdjustmentItem,
 	SaleAdjustmentStatus,
 	SaleProduct,
 	SaleStatus,
 	SaleStatusHistory,
 } from "@/entities";
-import { AppError } from "@/errors/AppError";
+import { AppError, type ValidationErrorDetail } from "@/errors/AppError";
 import {
 	saleAdjustmentRepository,
 	saleRepository,
 	saleStatusHistoryRepository,
 	sellerRepository,
 } from "@/repositories";
-import type { CheckoutInput } from "@/schemas/sale.schema";
-import { canSellerTransition } from "@/services/sale-status";
+import type {
+	CheckoutInput,
+	ProposeAdjustmentInput,
+} from "@/schemas/sale.schema";
+import {
+	ADJUSTABLE_STATUSES,
+	canSellerTransition,
+} from "@/services/sale-status";
 
 export interface FormattedSaleItem {
 	id: string;
@@ -425,6 +432,138 @@ export class SaleService {
 				? this.formatAdjustment(pendingAdjustment, Number(sale.total_amount))
 				: null,
 		};
+	}
+
+	/**
+	 * Vendedor propõe ajuste de quantidade ou pesagem dos próprios itens (RF-56).
+	 * Não há alteração unilateral: o total, o pagamento e o estoque só mudam quando o
+	 * cliente aceitar. O pedido fica em AGUARDANDO_APROVACAO_CLIENTE até a resposta.
+	 */
+	async proposeAdjustment(
+		sellerUserId: string,
+		saleId: string,
+		data: ProposeAdjustmentInput,
+	): Promise<FormattedSellerOrderDetail> {
+		const seller = await sellerRepository.findByUserId(sellerUserId);
+		if (!seller) {
+			throw new AppError("Perfil de vendedor não encontrado.", 404);
+		}
+
+		await AppDataSource.transaction(async (manager) => {
+			const sale = await this.lockSale(manager, saleId);
+			if (!sale) {
+				throw new AppError("Pedido não encontrado.", 404);
+			}
+
+			const saleItems = await manager.find(SaleProduct, {
+				where: { sale_id: sale.id },
+				relations: { product: true },
+			});
+
+			if (!saleItems.some((item) => item.product?.seller_id === seller.id)) {
+				throw new AppError(
+					"Você não tem permissão para ajustar este pedido.",
+					403,
+				);
+			}
+
+			if (sale.status === SaleStatus.AGUARDANDO_APROVACAO_CLIENTE) {
+				throw new AppError(
+					"Já existe uma proposta de ajuste aguardando a resposta do cliente.",
+					409,
+				);
+			}
+
+			if (!ADJUSTABLE_STATUSES.includes(sale.status)) {
+				throw new AppError(
+					`Não é possível propor ajuste em um pedido ${sale.status}. O ajuste só é permitido em pedidos ABERTA ou EM_PREPARACAO.`,
+					400,
+				);
+			}
+
+			const errors: ValidationErrorDetail[] = [];
+			const adjustmentItems: Partial<SaleAdjustmentItem>[] = [];
+
+			data.items.forEach((input, index) => {
+				const saleItem = saleItems.find(
+					(item) => item.id === input.sale_product_id,
+				);
+
+				if (!saleItem) {
+					errors.push({
+						field: `items.${index}.sale_product_id`,
+						message: "Item não pertence a este pedido.",
+					});
+					return;
+				}
+
+				if (saleItem.product?.seller_id !== seller.id) {
+					throw new AppError(
+						"Você só pode ajustar os itens dos seus produtos.",
+						403,
+					);
+				}
+
+				const originalQuantity = Number(saleItem.quantity);
+				const proposedQuantity = Number(input.quantity.toFixed(3));
+
+				if (proposedQuantity === originalQuantity) {
+					errors.push({
+						field: `items.${index}.quantity`,
+						message: "A quantidade proposta é igual à atual.",
+					});
+					return;
+				}
+
+				// Um aumento precisa caber no estoque disponível agora; o aceite confere de novo sob lock
+				const increase = proposedQuantity - originalQuantity;
+				const availableStock = Number(saleItem.product?.stock ?? 0);
+				if (increase > availableStock) {
+					errors.push({
+						field: `items.${index}.quantity`,
+						message: `Estoque insuficiente para o aumento de "${saleItem.product?.name}". Disponível: ${availableStock}, aumento solicitado: ${Number(increase.toFixed(3))}.`,
+					});
+					return;
+				}
+
+				// O preço unitário fica congelado na compra (RNF-08); o ajuste muda só a quantidade
+				adjustmentItems.push({
+					sale_product_id: saleItem.id,
+					original_quantity: originalQuantity,
+					original_unit_price: Number(saleItem.unit_price),
+					proposed_quantity: proposedQuantity,
+					proposed_unit_price: Number(saleItem.unit_price),
+				});
+			});
+
+			if (errors.length > 0) {
+				throw new AppError("Proposta de ajuste inválida.", 400, errors);
+			}
+
+			const adjustment = manager.create(SaleAdjustment, {
+				sale_id: sale.id,
+				seller_id: seller.id,
+				reason: data.reason,
+				status: SaleAdjustmentStatus.PENDENTE,
+				previous_status: sale.status,
+				responded_at: null,
+				items: adjustmentItems.map((item) =>
+					manager.create(SaleAdjustmentItem, item),
+				),
+			});
+			await manager.save(adjustment);
+
+			sale.status = SaleStatus.AGUARDANDO_APROVACAO_CLIENTE;
+			await manager.save(sale);
+			await this.recordStatusChange(
+				manager,
+				sale.id,
+				SaleStatus.AGUARDANDO_APROVACAO_CLIENTE,
+				sellerUserId,
+			);
+		});
+
+		return this.getSellerOrderDetail(sellerUserId, saleId);
 	}
 
 	/**

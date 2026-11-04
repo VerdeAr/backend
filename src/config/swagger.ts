@@ -1012,6 +1012,43 @@ export const swaggerDoc = {
 					"pending_adjustment",
 				],
 			},
+			ProposeAdjustmentInput: {
+				type: "object",
+				properties: {
+					reason: {
+						type: "string",
+						minLength: 1,
+						maxLength: 500,
+						example: "Peso real do tomate após a pesagem: 1,8 kg",
+					},
+					items: {
+						type: "array",
+						minItems: 1,
+						description:
+							"Itens do próprio vendedor a ajustar, sem repetição. Só a quantidade muda; o preço unitário da compra é mantido.",
+						items: {
+							type: "object",
+							properties: {
+								sale_product_id: {
+									type: "string",
+									format: "uuid",
+									description: "ID do item do pedido (`items[].id` no detalhe)",
+								},
+								quantity: {
+									type: "number",
+									exclusiveMinimum: true,
+									minimum: 0,
+									description:
+										"Nova quantidade, maior que zero, com até 3 casas decimais",
+									example: 1.8,
+								},
+							},
+							required: ["sale_product_id", "quantity"],
+						},
+					},
+				},
+				required: ["reason", "items"],
+			},
 			UpdateSaleStatusInput: {
 				type: "object",
 				properties: {
@@ -2594,6 +2631,73 @@ export const swaggerDoc = {
 					},
 					404: {
 						description: "Pedido ou perfil de vendedor não encontrado",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+				},
+			},
+		},
+		"/vendedor/pedidos/{id}/propor-ajuste": {
+			post: {
+				tags: ["Vendedor - Pedidos"],
+				summary: "Propor ajuste de itens ou pesagem ao cliente",
+				description:
+					"Só para pedidos ABERTA ou EM_PREPARACAO e só para os itens do vendedor. O pedido passa a AGUARDANDO_APROVACAO_CLIENTE " +
+					"e guarda o status anterior. Total, pagamento e estoque **não mudam** até o cliente aceitar. Um aumento de quantidade " +
+					"precisa caber no estoque disponível. Existe no máximo uma proposta pendente por pedido.",
+				security: authenticated,
+				parameters: [idPathParameter],
+				requestBody: {
+					required: true,
+					content: {
+						"application/json": {
+							schema: { $ref: "#/components/schemas/ProposeAdjustmentInput" },
+						},
+					},
+				},
+				responses: {
+					201: {
+						description:
+							"Proposta criada; retorna o detalhe do pedido com `pending_adjustment`",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/SellerOrderDetail" },
+							},
+						},
+					},
+					400: {
+						description:
+							"Dados inválidos (lista de campos), item fora do pedido, quantidade igual à atual, aumento acima do estoque " +
+							"ou status que não permite ajuste",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					401: { $ref: "#/components/responses/Unauthorized" },
+					403: {
+						description:
+							"Permissão restrita a vendedores, pedido sem produtos do vendedor ou item de outro vendedor",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					404: {
+						description: "Pedido ou perfil de vendedor não encontrado",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					409: {
+						description: "Já existe uma proposta pendente para o pedido",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
