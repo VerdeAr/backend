@@ -69,7 +69,7 @@ export class SaleController {
 
 	/**
 	 * GET /vendedor/pedidos/pendentes/count
-	 * Retorna o número de pedidos no status ABERTA para notificações do vendedor.
+	 * Retorna o número de pedidos que aguardam ação do vendedor (ABERTA e EM_PREPARACAO).
 	 */
 	async countPendingOrders(req: Request, res: Response, next: NextFunction) {
 		try {
@@ -83,7 +83,7 @@ export class SaleController {
 
 	/**
 	 * PATCH /vendas/:id/status
-	 * Atualiza o status do pedido para FINALIZADA ou CANCELADA (estornando estoque).
+	 * Atualiza o status do pedido conforme a máquina de estados (estornando estoque ao cancelar).
 	 */
 	async updateStatus(req: Request, res: Response, next: NextFunction) {
 		try {

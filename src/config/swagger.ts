@@ -1,3 +1,15 @@
+import { SaleStatus } from "@/entities/enums";
+
+// Status possíveis de uma venda (sales_status_enum)
+const SALE_STATUSES = Object.values(SaleStatus);
+
+// Máquina de estados do pedido para o vendedor (ver services/sale-status.ts)
+const SALE_TRANSITIONS_DESCRIPTION =
+	"Fluxo: ABERTA → EM_PREPARACAO → A_CAMINHO (só Entrega) → FINALIZADA; na Retirada, EM_PREPARACAO → FINALIZADA. " +
+	"ABERTA → FINALIZADA continua permitido. CANCELADA a partir de ABERTA, EM_PREPARACAO ou AGUARDANDO_APROVACAO_CLIENTE; " +
+	"ao cancelar, o estoque dos itens é devolvido uma única vez. Um pedido em AGUARDANDO_APROVACAO_CLIENTE só pode ser cancelado, " +
+	"e esse status só é alcançado pela proposta de ajuste. FINALIZADA e CANCELADA são finais.";
+
 // Parâmetro de caminho "id" (UUID) reutilizado pelas rotas com recurso identificado
 const idPathParameter = {
 	name: "id",
@@ -702,7 +714,7 @@ export const swaggerDoc = {
 					},
 					status: {
 						type: "string",
-						enum: ["ABERTA", "FINALIZADA", "CANCELADA"],
+						enum: SALE_STATUSES,
 						example: "ABERTA",
 					},
 					total_amount: {
@@ -778,7 +790,7 @@ export const swaggerDoc = {
 					delivery_type: { type: "string", enum: ["ENTREGA", "RETIRADA"] },
 					status: {
 						type: "string",
-						enum: ["ABERTA", "FINALIZADA", "CANCELADA"],
+						enum: SALE_STATUSES,
 					},
 					total_amount: { type: "number", example: 39.5 },
 					created_at: { type: "string", format: "date-time" },
@@ -821,7 +833,7 @@ export const swaggerDoc = {
 					id: { type: "string", format: "uuid" },
 					status: {
 						type: "string",
-						enum: ["ABERTA", "FINALIZADA", "CANCELADA"],
+						enum: SALE_STATUSES,
 					},
 					delivery_type: { type: "string", enum: ["ENTREGA", "RETIRADA"] },
 					created_at: { type: "string", format: "date-time" },
@@ -872,9 +884,8 @@ export const swaggerDoc = {
 				properties: {
 					status: {
 						type: "string",
-						enum: ["ABERTA", "FINALIZADA", "CANCELADA"],
-						description:
-							"Transições válidas: ABERTA → FINALIZADA ou ABERTA → CANCELADA. Enviar o mesmo status atual não altera nada.",
+						enum: SALE_STATUSES,
+						description: `${SALE_TRANSITIONS_DESCRIPTION} Enviar o mesmo status atual não altera nada.`,
 						example: "FINALIZADA",
 					},
 				},
@@ -2306,7 +2317,7 @@ export const swaggerDoc = {
 				summary: "Alterar o status de uma venda (vendedor)",
 				description:
 					"Equivalente a `PATCH /vendedor/pedidos/{id}/status` (mesmo comportamento e resposta); é a rota usada pelo frontend. " +
-					"Apenas vendedores com produtos na venda podem alterá-la. ABERTA → FINALIZADA ou ABERTA → CANCELADA; ao cancelar, o estoque dos itens é devolvido.",
+					`Apenas vendedores com produtos na venda podem alterá-la. ${SALE_TRANSITIONS_DESCRIPTION}`,
 				security: authenticated,
 				parameters: [idPathParameter],
 				requestBody: {
@@ -2329,7 +2340,7 @@ export const swaggerDoc = {
 					},
 					400: {
 						description:
-							"Dados inválidos ou venda já finalizada ou cancelada (estados finais não mudam)",
+							"Dados inválidos, transição não permitida pela máquina de estados ou venda já finalizada ou cancelada",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
@@ -2371,7 +2382,7 @@ export const swaggerDoc = {
 						required: false,
 						schema: {
 							type: "string",
-							enum: ["ABERTA", "FINALIZADA", "CANCELADA"],
+							enum: SALE_STATUSES,
 						},
 						description: "Filtrar por status",
 					},
@@ -2398,7 +2409,8 @@ export const swaggerDoc = {
 		"/vendedor/pedidos/pendentes/count": {
 			get: {
 				tags: ["Vendedor - Pedidos"],
-				summary: "Contar os pedidos pendentes (ABERTA) do vendedor",
+				summary:
+					"Contar os pedidos que aguardam ação do vendedor (ABERTA e EM_PREPARACAO)",
 				security: authenticated,
 				responses: {
 					200: {
@@ -2424,7 +2436,7 @@ export const swaggerDoc = {
 				summary: "Alterar o status de um pedido do vendedor",
 				description:
 					"Equivalente a `PATCH /vendas/{id}/status` (mesmo comportamento e resposta). " +
-					"ABERTA → FINALIZADA ou ABERTA → CANCELADA; ao cancelar, o estoque dos itens é devolvido.",
+					SALE_TRANSITIONS_DESCRIPTION,
 				security: authenticated,
 				parameters: [idPathParameter],
 				requestBody: {

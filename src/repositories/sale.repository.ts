@@ -1,6 +1,7 @@
 import { AppDataSource } from "@/config/database";
-import { SaleStatus } from "@/entities/enums";
+import type { SaleStatus } from "@/entities/enums";
 import { Sale } from "@/entities/Sale";
+import { SELLER_PENDING_STATUSES } from "@/services/sale-status";
 
 export const saleRepository = AppDataSource.getRepository(Sale).extend({
 	async findByIdWithDetails(saleId: string): Promise<Sale | null> {
@@ -64,7 +65,9 @@ export const saleRepository = AppDataSource.getRepository(Sale).extend({
 			.innerJoin("item.product", "product", "product.seller_id = :sellerId", {
 				sellerId,
 			})
-			.where("sale.status = :status", { status: SaleStatus.ABERTA })
+			.where("sale.status IN (:...statuses)", {
+				statuses: SELLER_PENDING_STATUSES,
+			})
 			.select("COUNT(DISTINCT sale.id)", "count")
 			.getRawOne();
 

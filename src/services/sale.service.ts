@@ -1,3 +1,4 @@
+import type { EntityManager } from "typeorm";
 import { AppDataSource } from "@/config/database";
 import {
 	Cart,
@@ -7,12 +8,16 @@ import {
 	PaymentMethod,
 	Product,
 	Sale,
+	SaleAdjustment,
+	SaleAdjustmentStatus,
 	SaleProduct,
 	SaleStatus,
+	SaleStatusHistory,
 } from "@/entities";
 import { AppError } from "@/errors/AppError";
 import { saleRepository, sellerRepository } from "@/repositories";
 import type { CheckoutInput } from "@/schemas/sale.schema";
+import { canSellerTransition } from "@/services/sale-status";
 
 export interface FormattedSaleItem {
 	id: string;
@@ -187,6 +192,12 @@ export class SaleService {
 				status: SaleStatus.ABERTA,
 			});
 			const savedSale = await manager.save(sale);
+			await this.recordStatusChange(
+				manager,
+				savedSale.id,
+				SaleStatus.ABERTA,
+				userId,
+			);
 
 			// 7. Criação dos registros em VendaProduto (SaleProduct)
 			const saleProducts = cart.items.map((item) =>
@@ -343,7 +354,7 @@ export class SaleService {
 	}
 
 	/**
-	 * Retorna a contagem de pedidos pendentes (ABERTA) para o vendedor.
+	 * Retorna a contagem de pedidos que aguardam ação do vendedor (ABERTA e EM_PREPARACAO).
 	 */
 	async countPendingBySeller(sellerUserId: string): Promise<{ count: number }> {
 		const seller = await sellerRepository.findByUserId(sellerUserId);
@@ -356,9 +367,11 @@ export class SaleService {
 	}
 
 	/**
-	 * Atualiza o status de uma venda com integridade transacional ACID.
-	 * Caso o novo status seja CANCELADA, os produtos vendidos têm seus estoques
-	 * atomicamente estornados sob transação TypeORM com lock pessimista.
+	 * Atualiza o status de uma venda com integridade transacional ACID, seguindo a
+	 * máquina de estados de `sale-status.ts`.
+	 * A linha do pedido é bloqueada (pessimistic_write) antes de qualquer leitura de status,
+	 * o que serializa mudanças concorrentes: um pedido cancelado duas vezes, ao mesmo tempo
+	 * ou em sequência, devolve o estoque uma única vez.
 	 */
 	async updateSaleStatus(
 		sellerUserId: string,
@@ -371,22 +384,18 @@ export class SaleService {
 		}
 
 		await AppDataSource.transaction(async (manager) => {
-			const sale = await manager.findOne(Sale, {
-				where: { id: saleId },
-				relations: {
-					items: {
-						product: true,
-					},
-					customer: true,
-				},
-			});
-
+			const sale = await this.lockSale(manager, saleId);
 			if (!sale) {
 				throw new AppError("Pedido não encontrado.", 404);
 			}
 
+			const items = await manager.find(SaleProduct, {
+				where: { sale_id: sale.id },
+				relations: { product: true },
+			});
+
 			// Verifica se o vendedor possui produtos neste pedido
-			const hasSellerProduct = (sale.items || []).some(
+			const hasSellerProduct = items.some(
 				(item) => item.product?.seller_id === seller.id,
 			);
 
@@ -413,26 +422,37 @@ export class SaleService {
 				);
 			}
 
-			// Se o novo status for CANCELADA, estorna o estoque atomicamente com lock pessimista
-			if (newStatus === SaleStatus.CANCELADA) {
-				for (const item of sale.items || []) {
-					const product = await manager
-						.createQueryBuilder(Product, "product")
-						.setLock("pessimistic_write")
-						.where("product.id = :id", { id: item.product_id })
-						.getOne();
+			if (
+				sale.status === SaleStatus.AGUARDANDO_APROVACAO_CLIENTE &&
+				newStatus !== SaleStatus.CANCELADA
+			) {
+				throw new AppError(
+					"Este pedido aguarda a resposta do cliente a uma proposta de ajuste e só pode ser cancelado.",
+					400,
+				);
+			}
 
-					if (product) {
-						product.stock = Number(
-							(Number(product.stock) + Number(item.quantity)).toFixed(3),
-						);
-						await manager.save(product);
-					}
-				}
+			if (!canSellerTransition(sale.status, newStatus, sale.delivery_type)) {
+				throw new AppError(
+					`Não é possível alterar o pedido de ${sale.status} para ${newStatus}.`,
+					400,
+				);
+			}
+
+			if (newStatus === SaleStatus.CANCELADA) {
+				await this.restockItems(manager, items);
+
+				// Uma proposta pendente deixa de valer quando o vendedor cancela o pedido
+				await manager.update(
+					SaleAdjustment,
+					{ sale_id: sale.id, status: SaleAdjustmentStatus.PENDENTE },
+					{ status: SaleAdjustmentStatus.RECUSADO, responded_at: new Date() },
+				);
 			}
 
 			sale.status = newStatus;
 			await manager.save(sale);
+			await this.recordStatusChange(manager, sale.id, newStatus, sellerUserId);
 		});
 
 		// Retorna o pedido atualizado com a perspectiva do vendedor
@@ -442,6 +462,57 @@ export class SaleService {
 			throw new AppError("Pedido não encontrado após atualização.", 404);
 		}
 		return targetOrder;
+	}
+
+	/**
+	 * Bloqueia a linha do pedido até o fim da transação. O lock é feito sem joins porque o
+	 * PostgreSQL não aceita FOR UPDATE no lado anulável de um LEFT JOIN.
+	 */
+	private lockSale(manager: EntityManager, saleId: string) {
+		return manager
+			.createQueryBuilder(Sale, "sale")
+			.setLock("pessimistic_write")
+			.where("sale.id = :saleId", { saleId })
+			.getOne();
+	}
+
+	/**
+	 * Devolve ao estoque a quantidade de cada item, com lock pessimista no produto.
+	 * Os produtos são bloqueados em ordem de ID para evitar deadlock entre transações.
+	 */
+	private async restockItems(manager: EntityManager, items: SaleProduct[]) {
+		const sortedItems = [...items].sort((a, b) =>
+			a.product_id.localeCompare(b.product_id),
+		);
+
+		for (const item of sortedItems) {
+			const product = await manager
+				.createQueryBuilder(Product, "product")
+				.setLock("pessimistic_write")
+				.where("product.id = :id", { id: item.product_id })
+				.getOne();
+
+			if (product) {
+				product.stock = Number(
+					(Number(product.stock) + Number(item.quantity)).toFixed(3),
+				);
+				await manager.save(product);
+			}
+		}
+	}
+
+	// Registra uma entrada na linha do tempo do pedido
+	private async recordStatusChange(
+		manager: EntityManager,
+		saleId: string,
+		status: SaleStatus,
+		changedById: string,
+	) {
+		await manager.insert(SaleStatusHistory, {
+			sale_id: saleId,
+			status,
+			changed_by_id: changedById,
+		});
 	}
 
 	private formatPurchase(sale: Sale): FormattedPurchase {

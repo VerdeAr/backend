@@ -33,7 +33,8 @@ export type SaleIdParam = z.infer<typeof saleIdParamSchema>;
 
 export const updateSaleStatusSchema = z.object({
 	status: z.nativeEnum(SaleStatus, {
-		message: "Status deve ser ABERTA, FINALIZADA ou CANCELADA",
+		message:
+			"Status deve ser ABERTA, EM_PREPARACAO, A_CAMINHO, AGUARDANDO_APROVACAO_CLIENTE, FINALIZADA ou CANCELADA",
 	}),
 });
 
