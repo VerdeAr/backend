@@ -15,7 +15,12 @@ import {
 	SaleStatusHistory,
 } from "@/entities";
 import { AppError } from "@/errors/AppError";
-import { saleRepository, sellerRepository } from "@/repositories";
+import {
+	saleAdjustmentRepository,
+	saleRepository,
+	saleStatusHistoryRepository,
+	sellerRepository,
+} from "@/repositories";
 import type { CheckoutInput } from "@/schemas/sale.schema";
 import { canSellerTransition } from "@/services/sale-status";
 
@@ -66,6 +71,51 @@ export interface FormattedSellerOrder {
 	items: FormattedSaleItem[];
 	seller_subtotal: number;
 	order_total: number;
+}
+
+export interface FormattedStatusHistoryEntry {
+	status: SaleStatus;
+	changed_at: Date;
+	changed_by: { id: string; name: string } | null;
+}
+
+export interface FormattedSaleAdjustmentItem {
+	id: string;
+	sale_product_id: string;
+	product_id: string | null;
+	product_name: string;
+	original_quantity: number;
+	proposed_quantity: number;
+	original_unit_price: number;
+	proposed_unit_price: number;
+	original_total: number;
+	proposed_total: number;
+}
+
+export interface FormattedSaleAdjustment {
+	id: string;
+	reason: string;
+	status: SaleAdjustmentStatus;
+	previous_status: SaleStatus;
+	created_at: Date;
+	items: FormattedSaleAdjustmentItem[];
+	current_order_total: number;
+	proposed_order_total: number;
+}
+
+export interface FormattedSellerOrderDetail {
+	id: string;
+	status: SaleStatus;
+	delivery_type: DeliveryType;
+	created_at: Date;
+	updated_at: Date;
+	payment_method: string | null;
+	customer: FormattedSellerOrder["customer"];
+	items: FormattedSaleItem[];
+	seller_subtotal: number;
+	order_total: number;
+	status_history: FormattedStatusHistoryEntry[];
+	pending_adjustment: FormattedSaleAdjustment | null;
 }
 
 export class SaleService {
@@ -307,50 +357,74 @@ export class SaleService {
 		const sales = await saleRepository.findBySellerId(seller.id, status);
 
 		return sales.map((sale) => {
-			const sellerItems = (sale.items || []).filter(
-				(item) => item.product?.seller_id === seller.id,
-			);
-
-			let sellerSubtotal = 0;
-			const formattedItems: FormattedSaleItem[] = sellerItems.map((item) => {
-				const unitPrice = Number(item.unit_price);
-				const quantity = Number(item.quantity);
-				const itemTotal = Number((unitPrice * quantity).toFixed(2));
-				sellerSubtotal += itemTotal;
-
-				return {
-					id: item.id,
-					product_id: item.product_id,
-					product_name: item.product?.name || "Produto",
-					product_image: item.product?.image_url || null,
-					measurement_unit:
-						item.product?.measurement_unit?.symbol ||
-						item.product?.measurement_unit?.name ||
-						null,
-					quantity,
-					unit_price: unitPrice,
-					total: itemTotal,
-				};
-			});
+			const { items, subtotal } = this.formatSellerItems(sale, seller.id);
 
 			return {
 				id: sale.id,
 				status: sale.status,
 				delivery_type: sale.delivery_type,
 				created_at: sale.created_at,
-				customer: {
-					id: sale.customer.id,
-					name: sale.customer.name,
-					email: sale.customer.email,
-					phone: sale.customer.phone || null,
-					address: sale.customer.address || null,
-					neighborhood: sale.customer.neighborhood?.name || null,
-				},
-				items: formattedItems,
-				seller_subtotal: Number(sellerSubtotal.toFixed(2)),
+				customer: this.formatSellerCustomer(sale),
+				items,
+				seller_subtotal: subtotal,
 				order_total: Number(Number(sale.total_amount).toFixed(2)),
 			};
 		});
+	}
+
+	/**
+	 * Detalhe de um pedido para o vendedor (RF-54): só os itens dele, os dados de contato
+	 * e entrega do cliente, a linha do tempo de status e a proposta de ajuste pendente.
+	 */
+	async getSellerOrderDetail(
+		sellerUserId: string,
+		saleId: string,
+	): Promise<FormattedSellerOrderDetail> {
+		const seller = await sellerRepository.findByUserId(sellerUserId);
+		if (!seller) {
+			throw new AppError("Perfil de vendedor não encontrado.", 404);
+		}
+
+		const sale = await saleRepository.findSellerOrderDetail(saleId);
+		if (!sale) {
+			throw new AppError("Pedido não encontrado.", 404);
+		}
+
+		const { items, subtotal } = this.formatSellerItems(sale, seller.id);
+		if (items.length === 0) {
+			throw new AppError(
+				"Você não tem permissão para acessar este pedido.",
+				403,
+			);
+		}
+
+		const [history, pendingAdjustment] = await Promise.all([
+			saleStatusHistoryRepository.findBySaleId(sale.id),
+			saleAdjustmentRepository.findPendingBySaleId(sale.id),
+		]);
+
+		return {
+			id: sale.id,
+			status: sale.status,
+			delivery_type: sale.delivery_type,
+			created_at: sale.created_at,
+			updated_at: sale.updated_at,
+			payment_method: sale.payments?.[0]?.payment_method?.description || null,
+			customer: this.formatSellerCustomer(sale),
+			items,
+			seller_subtotal: subtotal,
+			order_total: Number(Number(sale.total_amount).toFixed(2)),
+			status_history: history.map((entry) => ({
+				status: entry.status,
+				changed_at: entry.created_at,
+				changed_by: entry.changed_by
+					? { id: entry.changed_by.id, name: entry.changed_by.name }
+					: null,
+			})),
+			pending_adjustment: pendingAdjustment
+				? this.formatAdjustment(pendingAdjustment, Number(sale.total_amount))
+				: null,
+		};
 	}
 
 	/**
@@ -499,6 +573,98 @@ export class SaleService {
 				await manager.save(product);
 			}
 		}
+	}
+
+	// Itens do pedido que pertencem ao vendedor, com o subtotal da parte dele
+	private formatSellerItems(
+		sale: Sale,
+		sellerId: string,
+	): { items: FormattedSaleItem[]; subtotal: number } {
+		let subtotal = 0;
+		const items = (sale.items || [])
+			.filter((item) => item.product?.seller_id === sellerId)
+			.map((item) => {
+				const unitPrice = Number(item.unit_price);
+				const quantity = Number(item.quantity);
+				const itemTotal = Number((unitPrice * quantity).toFixed(2));
+				subtotal += itemTotal;
+
+				return {
+					id: item.id,
+					product_id: item.product_id,
+					product_name: item.product?.name || "Produto",
+					product_image: item.product?.image_url || null,
+					measurement_unit:
+						item.product?.measurement_unit?.symbol ||
+						item.product?.measurement_unit?.name ||
+						null,
+					quantity,
+					unit_price: unitPrice,
+					total: itemTotal,
+				};
+			});
+
+		return { items, subtotal: Number(subtotal.toFixed(2)) };
+	}
+
+	// Dados do cliente que o vendedor pode ver (contato e entrega, sem dados sensíveis)
+	private formatSellerCustomer(sale: Sale): FormattedSellerOrder["customer"] {
+		return {
+			id: sale.customer.id,
+			name: sale.customer.name,
+			email: sale.customer.email,
+			phone: sale.customer.phone || null,
+			address: sale.customer.address || null,
+			neighborhood: sale.customer.neighborhood?.name || null,
+		};
+	}
+
+	/**
+	 * Proposta de ajuste com os valores atuais e os propostos de cada item, e o total que o
+	 * pedido terá se o cliente aceitar (o frete não muda).
+	 */
+	private formatAdjustment(
+		adjustment: SaleAdjustment,
+		currentOrderTotal: number,
+	): FormattedSaleAdjustment {
+		let difference = 0;
+		const items = (adjustment.items || []).map((item) => {
+			const originalQuantity = Number(item.original_quantity);
+			const proposedQuantity = Number(item.proposed_quantity);
+			const originalUnitPrice = Number(item.original_unit_price);
+			const proposedUnitPrice = Number(item.proposed_unit_price);
+			const originalTotal = Number(
+				(originalQuantity * originalUnitPrice).toFixed(2),
+			);
+			const proposedTotal = Number(
+				(proposedQuantity * proposedUnitPrice).toFixed(2),
+			);
+			difference += proposedTotal - originalTotal;
+
+			return {
+				id: item.id,
+				sale_product_id: item.sale_product_id,
+				product_id: item.sale_product?.product_id || null,
+				product_name: item.sale_product?.product?.name || "Produto",
+				original_quantity: originalQuantity,
+				proposed_quantity: proposedQuantity,
+				original_unit_price: originalUnitPrice,
+				proposed_unit_price: proposedUnitPrice,
+				original_total: originalTotal,
+				proposed_total: proposedTotal,
+			};
+		});
+
+		return {
+			id: adjustment.id,
+			reason: adjustment.reason,
+			status: adjustment.status,
+			previous_status: adjustment.previous_status,
+			created_at: adjustment.created_at,
+			items,
+			current_order_total: Number(currentOrderTotal.toFixed(2)),
+			proposed_order_total: Number((currentOrderTotal + difference).toFixed(2)),
+		};
 	}
 
 	// Registra uma entrada na linha do tempo do pedido

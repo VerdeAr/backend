@@ -68,6 +68,21 @@ export class SaleController {
 	}
 
 	/**
+	 * GET /vendedor/pedidos/:id
+	 * Retorna o detalhe do pedido na visão do vendedor (itens dele, cliente, histórico e ajuste pendente).
+	 */
+	async getSellerOrderDetail(req: Request, res: Response, next: NextFunction) {
+		try {
+			const sellerUserId = req.user!.id;
+			const { id } = saleIdParamSchema.parse(req.params);
+			const order = await saleService.getSellerOrderDetail(sellerUserId, id);
+			return res.status(200).json(order);
+		} catch (error) {
+			next(error);
+		}
+	}
+
+	/**
 	 * GET /vendedor/pedidos/pendentes/count
 	 * Retorna o número de pedidos que aguardam ação do vendedor (ABERTA e EM_PREPARACAO).
 	 */

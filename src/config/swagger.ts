@@ -879,6 +879,139 @@ export const swaggerDoc = {
 					"order_total",
 				],
 			},
+			StatusHistoryEntry: {
+				type: "object",
+				description: "Entrada da linha do tempo de status do pedido",
+				properties: {
+					status: { type: "string", enum: SALE_STATUSES },
+					changed_at: { type: "string", format: "date-time" },
+					changed_by: {
+						type: "object",
+						nullable: true,
+						description:
+							"Quem fez a mudança; nulo nos registros anteriores ao histórico",
+						properties: {
+							id: { type: "string", format: "uuid" },
+							name: { type: "string" },
+						},
+					},
+				},
+				required: ["status", "changed_at"],
+			},
+			SaleAdjustment: {
+				type: "object",
+				description:
+					"Proposta de ajuste de itens ou pesagem feita pelo vendedor, com os valores atuais e os propostos",
+				properties: {
+					id: { type: "string", format: "uuid" },
+					reason: { type: "string", example: "Peso real do tomate: 1,8 kg" },
+					status: {
+						type: "string",
+						enum: ["PENDENTE", "ACEITO", "RECUSADO"],
+					},
+					previous_status: {
+						type: "string",
+						enum: SALE_STATUSES,
+						description: "Status ao qual o pedido volta se o cliente aceitar",
+					},
+					created_at: { type: "string", format: "date-time" },
+					items: {
+						type: "array",
+						items: {
+							type: "object",
+							properties: {
+								id: { type: "string", format: "uuid" },
+								sale_product_id: { type: "string", format: "uuid" },
+								product_id: { type: "string", format: "uuid", nullable: true },
+								product_name: { type: "string", example: "Tomate" },
+								original_quantity: { type: "number", example: 2 },
+								proposed_quantity: { type: "number", example: 1.8 },
+								original_unit_price: { type: "number", example: 9 },
+								proposed_unit_price: { type: "number", example: 9 },
+								original_total: { type: "number", example: 18 },
+								proposed_total: { type: "number", example: 16.2 },
+							},
+							required: [
+								"id",
+								"sale_product_id",
+								"product_name",
+								"original_quantity",
+								"proposed_quantity",
+								"original_unit_price",
+								"proposed_unit_price",
+								"original_total",
+								"proposed_total",
+							],
+						},
+					},
+					current_order_total: { type: "number", example: 30.5 },
+					proposed_order_total: {
+						type: "number",
+						description:
+							"Total do pedido se o ajuste for aceito (o frete não muda)",
+						example: 28.7,
+					},
+				},
+				required: [
+					"id",
+					"reason",
+					"status",
+					"previous_status",
+					"items",
+					"current_order_total",
+					"proposed_order_total",
+				],
+			},
+			SellerOrderDetail: {
+				type: "object",
+				description:
+					"Detalhe do pedido visto pelo vendedor: apenas os itens dele, com cliente, histórico e ajuste pendente",
+				properties: {
+					id: { type: "string", format: "uuid" },
+					status: { type: "string", enum: SALE_STATUSES },
+					delivery_type: { type: "string", enum: ["ENTREGA", "RETIRADA"] },
+					created_at: { type: "string", format: "date-time" },
+					updated_at: { type: "string", format: "date-time" },
+					payment_method: { type: "string", nullable: true, example: "PIX" },
+					customer: {
+						type: "object",
+						properties: {
+							id: { type: "string", format: "uuid" },
+							name: { type: "string" },
+							email: { type: "string", format: "email" },
+							phone: { type: "string", nullable: true },
+							address: { type: "string", nullable: true },
+							neighborhood: { type: "string", nullable: true },
+						},
+						required: ["id", "name", "email"],
+					},
+					items: {
+						type: "array",
+						items: { $ref: "#/components/schemas/FormattedSaleItem" },
+					},
+					seller_subtotal: { type: "number", example: 27 },
+					order_total: { type: "number", example: 39.5 },
+					status_history: {
+						type: "array",
+						items: { $ref: "#/components/schemas/StatusHistoryEntry" },
+					},
+					pending_adjustment: {
+						allOf: [{ $ref: "#/components/schemas/SaleAdjustment" }],
+						nullable: true,
+					},
+				},
+				required: [
+					"id",
+					"status",
+					"delivery_type",
+					"customer",
+					"items",
+					"seller_subtotal",
+					"order_total",
+					"status_history",
+					"pending_adjustment",
+				],
+			},
 			UpdateSaleStatusInput: {
 				type: "object",
 				properties: {
@@ -2427,6 +2560,46 @@ export const swaggerDoc = {
 					},
 					401: { $ref: "#/components/responses/Unauthorized" },
 					403: { $ref: "#/components/responses/Forbidden" },
+				},
+			},
+		},
+		"/vendedor/pedidos/{id}": {
+			get: {
+				tags: ["Vendedor - Pedidos"],
+				summary: "Detalhar um pedido do vendedor",
+				description:
+					"Mostra apenas os itens do vendedor logado, os dados de contato e entrega do cliente (sem senha nem CPF), " +
+					"a forma de pagamento, a linha do tempo de status e a proposta de ajuste pendente, se houver.",
+				security: authenticated,
+				parameters: [idPathParameter],
+				responses: {
+					200: {
+						description: "Detalhe do pedido",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/SellerOrderDetail" },
+							},
+						},
+					},
+					400: { $ref: "#/components/responses/ValidationError" },
+					401: { $ref: "#/components/responses/Unauthorized" },
+					403: {
+						description:
+							"Permissão restrita a vendedores ou pedido sem produtos do vendedor",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					404: {
+						description: "Pedido ou perfil de vendedor não encontrado",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
 				},
 			},
 		},

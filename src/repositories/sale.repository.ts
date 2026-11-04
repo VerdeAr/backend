@@ -20,6 +20,58 @@ export const saleRepository = AppDataSource.getRepository(Sale).extend({
 			.getOne();
 	},
 
+	/**
+	 * Detalhe do pedido para o vendedor. Seleciona os campos explicitamente para que dados
+	 * sensíveis do cliente (senha, CPF etc.) nunca saiam da camada de dados.
+	 */
+	async findSellerOrderDetail(saleId: string): Promise<Sale | null> {
+		return this.createQueryBuilder("sale")
+			.select([
+				"sale.id",
+				"sale.status",
+				"sale.delivery_type",
+				"sale.total_amount",
+				"sale.created_at",
+				"sale.updated_at",
+			])
+			.leftJoin("sale.customer", "customer")
+			.addSelect([
+				"customer.id",
+				"customer.name",
+				"customer.email",
+				"customer.phone",
+				"customer.address",
+			])
+			.leftJoin("customer.neighborhood", "neighborhood")
+			.addSelect(["neighborhood.id", "neighborhood.name"])
+			.leftJoin("sale.items", "items")
+			.addSelect([
+				"items.id",
+				"items.product_id",
+				"items.quantity",
+				"items.unit_price",
+			])
+			.leftJoin("items.product", "product")
+			.addSelect([
+				"product.id",
+				"product.name",
+				"product.image_url",
+				"product.seller_id",
+			])
+			.leftJoin("product.measurement_unit", "measurement_unit")
+			.addSelect([
+				"measurement_unit.id",
+				"measurement_unit.name",
+				"measurement_unit.symbol",
+			])
+			.leftJoin("sale.payments", "payments")
+			.addSelect(["payments.id", "payments.amount"])
+			.leftJoin("payments.payment_method", "payment_method")
+			.addSelect(["payment_method.id", "payment_method.description"])
+			.where("sale.id = :saleId", { saleId })
+			.getOne();
+	},
+
 	async findByCustomerId(customerId: string): Promise<Sale[]> {
 		return this.createQueryBuilder("sale")
 			.leftJoinAndSelect("sale.items", "items")

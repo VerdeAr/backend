@@ -8,6 +8,8 @@ export * from "./neighborhood.repository";
 export * from "./product.repository";
 export * from "./review.repository";
 export * from "./sale.repository";
+export * from "./sale-adjustment.repository";
 export * from "./sale-product.repository";
+export * from "./sale-status-history.repository";
 export * from "./seller.repository";
 export * from "./user.repository";

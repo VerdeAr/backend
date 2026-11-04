@@ -12,6 +12,8 @@ sellerOrderRoutes.use(ensureRole([UserRole.VENDEDOR]));
 
 sellerOrderRoutes.get("/", saleController.getSellerOrders);
 sellerOrderRoutes.get("/pendentes/count", saleController.countPendingOrders);
+// Registrada depois de /pendentes/count para não capturar esse caminho como :id
+sellerOrderRoutes.get("/:id", saleController.getSellerOrderDetail);
 sellerOrderRoutes.patch("/:id/status", saleController.updateStatus);
 
 export { sellerOrderRoutes };
