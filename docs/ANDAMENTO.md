@@ -67,7 +67,7 @@ Resultado: os ambientes de **homologação** e **produção** estão no ar, com 
 | Tarefa | Status | Backend | Frontend | QA |
 |---|---|---|---|---|
 | VER-58 — Mensagens e chat com WebSocket (Socket.io) | Fazendo | VER-59 Feito (no `main`) | VER-60 Feito | VER-61 **Fazendo** |
-| VER-62 — Endereços com CEP e autopreenchimento | Fazendo | VER-63 A fazer | VER-64 **Revisão** | VER-65 A fazer |
+| VER-62 — Endereços com CEP e autopreenchimento | Fazendo | VER-63 **Revisão** (migration de endereço estruturado e normalização de CEP) | VER-64 **Revisão** | VER-65 A fazer |
 | VER-74 — Blindagem de autenticação com cookies HTTP-Only | Fazendo | VER-75 Feito (no `main`) | VER-76 Feito | VER-77 **Fazendo** |
 | VER-78 — Avaliação pós-venda | Fazendo | VER-79 Feito (no `main`) | VER-80 Feito | VER-81 A fazer |
 | VER-90 — Frete dinâmico com OpenRouteService e Leaflet | A fazer (a tarefa; as subtarefas já começaram) | VER-91 **Fazendo** | VER-92 **Fazendo** | VER-93 A fazer |

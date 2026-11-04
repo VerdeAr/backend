@@ -4,6 +4,7 @@ import { UserRole } from "@/entities/enums";
 import { Seller } from "@/entities/Seller";
 import { AppError } from "@/errors/AppError";
 import { userRepository } from "@/repositories/user.repository";
+import { extractStructuredAddress } from "@/schemas/address.schema";
 import type {
 	UpdatePasswordInput,
 	UpdateProfileInput,
@@ -21,9 +22,22 @@ export class PersonService {
 			throw new AppError("Usuário não encontrado.", 404);
 		}
 
+		const structured = extractStructuredAddress(
+			data as Record<string, unknown>,
+		);
+
 		if (data.name !== undefined) user.name = data.name;
 		if (data.phone !== undefined) user.phone = data.phone;
 		if (data.address !== undefined) user.address = data.address;
+		if (structured.zip_code !== undefined) user.zip_code = structured.zip_code;
+		if (structured.street !== undefined) user.street = structured.street;
+		if (structured.number !== undefined) user.number = structured.number;
+		if (structured.complement !== undefined)
+			user.complement = structured.complement;
+		if (structured.neighborhood_name !== undefined)
+			user.neighborhood_name = structured.neighborhood_name;
+		if (structured.city !== undefined) user.city = structured.city;
+		if (structured.state !== undefined) user.state = structured.state;
 		if (data.neighborhood_id !== undefined)
 			user.neighborhood_id = data.neighborhood_id;
 
