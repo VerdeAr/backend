@@ -567,6 +567,152 @@ export class SaleService {
 	}
 
 	/**
+	 * Cliente responde à proposta de ajuste (RF-56), em uma única transação.
+	 * - Aceitar: aplica as novas quantidades, acerta o estoque pela diferença sob lock,
+	 *   recalcula o total (o frete não muda), atualiza o pagamento e volta ao status anterior.
+	 * - Recusar: cancela o pedido e devolve o estoque de todos os itens.
+	 * O lock na linha do pedido serializa respostas simultâneas: só a primeira encontra a
+	 * proposta pendente; a segunda recebe 409.
+	 */
+	async respondAdjustment(
+		customerId: string,
+		saleId: string,
+		accept: boolean,
+	): Promise<FormattedPurchase> {
+		await AppDataSource.transaction(async (manager) => {
+			const sale = await this.lockSale(manager, saleId);
+
+			// Pedido de outro cliente é tratado como inexistente, para não revelar que existe
+			if (!sale || sale.customer_id !== customerId) {
+				throw new AppError("Compra não encontrada.", 404);
+			}
+
+			const adjustment = await manager.findOne(SaleAdjustment, {
+				where: { sale_id: sale.id, status: SaleAdjustmentStatus.PENDENTE },
+				relations: { items: true },
+			});
+
+			if (
+				!adjustment ||
+				sale.status !== SaleStatus.AGUARDANDO_APROVACAO_CLIENTE
+			) {
+				throw new AppError(
+					"Não há proposta de ajuste pendente para esta compra.",
+					409,
+				);
+			}
+
+			const saleItems = await manager.find(SaleProduct, {
+				where: { sale_id: sale.id },
+			});
+
+			adjustment.responded_at = new Date();
+
+			if (!accept) {
+				await this.restockItems(manager, saleItems);
+
+				adjustment.status = SaleAdjustmentStatus.RECUSADO;
+				await manager.save(adjustment);
+
+				sale.status = SaleStatus.CANCELADA;
+				await manager.save(sale);
+				await this.recordStatusChange(
+					manager,
+					sale.id,
+					SaleStatus.CANCELADA,
+					customerId,
+				);
+				return;
+			}
+
+			// Bloqueia os produtos em ordem de ID para evitar deadlock entre transações
+			const adjustmentItems = [...adjustment.items].sort((a, b) => {
+				const productA =
+					saleItems.find((item) => item.id === a.sale_product_id)?.product_id ||
+					"";
+				const productB =
+					saleItems.find((item) => item.id === b.sale_product_id)?.product_id ||
+					"";
+				return productA.localeCompare(productB);
+			});
+
+			let totalDifference = 0;
+
+			for (const adjustmentItem of adjustmentItems) {
+				const saleItem = saleItems.find(
+					(item) => item.id === adjustmentItem.sale_product_id,
+				);
+				if (!saleItem) {
+					throw new AppError(
+						"Um item da proposta não pertence mais a esta compra.",
+						409,
+					);
+				}
+
+				const currentQuantity = Number(saleItem.quantity);
+				const proposedQuantity = Number(adjustmentItem.proposed_quantity);
+				const proposedUnitPrice = Number(adjustmentItem.proposed_unit_price);
+				const quantityDifference = Number(
+					(proposedQuantity - currentQuantity).toFixed(3),
+				);
+
+				const product = await manager
+					.createQueryBuilder(Product, "product")
+					.setLock("pessimistic_write")
+					.where("product.id = :id", { id: saleItem.product_id })
+					.getOne();
+
+				if (!product) {
+					throw new AppError("Um produto da proposta não foi encontrado.", 404);
+				}
+
+				// Aumento retira do estoque; redução devolve
+				const availableStock = Number(product.stock);
+				if (quantityDifference > availableStock) {
+					throw new AppError(
+						`Estoque insuficiente para aplicar o ajuste de "${product.name}". Disponível: ${availableStock}, necessário: ${quantityDifference}.`,
+						409,
+					);
+				}
+				product.stock = Number(
+					(availableStock - quantityDifference).toFixed(3),
+				);
+				await manager.save(product);
+
+				totalDifference +=
+					Number((proposedQuantity * proposedUnitPrice).toFixed(2)) -
+					Number((currentQuantity * Number(saleItem.unit_price)).toFixed(2));
+
+				saleItem.quantity = proposedQuantity;
+				saleItem.unit_price = proposedUnitPrice;
+				await manager.save(saleItem);
+			}
+
+			const newTotal = Number(
+				(Number(sale.total_amount) + totalDifference).toFixed(2),
+			);
+
+			// Cada venda tem um único pagamento registrado, com o valor total do pedido
+			await manager.update(Payment, { sale_id: sale.id }, { amount: newTotal });
+
+			adjustment.status = SaleAdjustmentStatus.ACEITO;
+			await manager.save(adjustment);
+
+			sale.total_amount = newTotal;
+			sale.status = adjustment.previous_status;
+			await manager.save(sale);
+			await this.recordStatusChange(
+				manager,
+				sale.id,
+				adjustment.previous_status,
+				customerId,
+			);
+		});
+
+		return this.getPurchaseById(customerId, saleId);
+	}
+
+	/**
 	 * Retorna a contagem de pedidos que aguardam ação do vendedor (ABERTA e EM_PREPARACAO).
 	 */
 	async countPendingBySeller(sellerUserId: string): Promise<{ count: number }> {

@@ -74,3 +74,11 @@ export const proposeAdjustmentSchema = z.object({
 });
 
 export type ProposeAdjustmentInput = z.infer<typeof proposeAdjustmentSchema>;
+
+export const respondAdjustmentSchema = z.object({
+	aceitar: z.boolean({
+		message: "Informe se aceita o ajuste (aceitar: true ou false)",
+	}),
+});
+
+export type RespondAdjustmentInput = z.infer<typeof respondAdjustmentSchema>;

@@ -1049,6 +1049,18 @@ export const swaggerDoc = {
 				},
 				required: ["reason", "items"],
 			},
+			RespondAdjustmentInput: {
+				type: "object",
+				properties: {
+					aceitar: {
+						type: "boolean",
+						description:
+							"true aplica o ajuste; false recusa e cancela o pedido",
+						example: true,
+					},
+				},
+				required: ["aceitar"],
+			},
 			UpdateSaleStatusInput: {
 				type: "object",
 				properties: {
@@ -2472,6 +2484,58 @@ export const swaggerDoc = {
 					401: { $ref: "#/components/responses/Unauthorized" },
 					404: {
 						description: "Compra não encontrada ou de outro cliente",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+				},
+			},
+		},
+		"/vendas/{id}/responder-ajuste": {
+			post: {
+				tags: ["Vendas e Checkout"],
+				summary: "Responder à proposta de ajuste (cliente)",
+				description:
+					"Ação exclusiva do cliente da compra, executada em uma única transação. " +
+					"**Aceitar** aplica as novas quantidades, acerta o estoque pela diferença, recalcula o total (o frete não muda), " +
+					"atualiza o pagamento registrado e devolve o pedido ao status anterior à proposta. " +
+					"**Recusar** cancela o pedido inteiro e devolve o estoque de todos os itens. " +
+					"Duas respostas simultâneas: só a primeira vale; a outra recebe 409.",
+				security: authenticated,
+				parameters: [idPathParameter],
+				requestBody: {
+					required: true,
+					content: {
+						"application/json": {
+							schema: { $ref: "#/components/schemas/RespondAdjustmentInput" },
+						},
+					},
+				},
+				responses: {
+					200: {
+						description: "Resposta registrada; retorna a compra atualizada",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/Purchase" },
+							},
+						},
+					},
+					400: { $ref: "#/components/responses/ValidationError" },
+					401: { $ref: "#/components/responses/Unauthorized" },
+					404: {
+						description:
+							"Compra inexistente ou de outro cliente (a existência não é revelada)",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					409: {
+						description:
+							"Não há proposta pendente (inclui uma resposta já dada) ou o estoque não cobre mais o aumento proposto",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },

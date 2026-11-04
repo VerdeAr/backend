@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import {
 	checkoutSchema,
 	proposeAdjustmentSchema,
+	respondAdjustmentSchema,
 	saleIdParamSchema,
 	sellerOrdersQuerySchema,
 	updateSaleStatusSchema,
@@ -47,6 +48,26 @@ export class SaleController {
 			const userId = req.user!.id;
 			const { id } = saleIdParamSchema.parse(req.params);
 			const purchase = await saleService.getPurchaseById(userId, id);
+			return res.status(200).json(purchase);
+		} catch (error) {
+			next(error);
+		}
+	}
+
+	/**
+	 * POST /vendas/:id/responder-ajuste
+	 * Cliente aceita ou recusa a proposta de ajuste pendente da própria compra.
+	 */
+	async respondAdjustment(req: Request, res: Response, next: NextFunction) {
+		try {
+			const customerId = req.user!.id;
+			const { id } = saleIdParamSchema.parse(req.params);
+			const { aceitar } = respondAdjustmentSchema.parse(req.body);
+			const purchase = await saleService.respondAdjustment(
+				customerId,
+				id,
+				aceitar,
+			);
 			return res.status(200).json(purchase);
 		} catch (error) {
 			next(error);
