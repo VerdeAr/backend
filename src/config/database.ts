@@ -19,6 +19,7 @@ import { Seller } from "@/entities/Seller.js";
 import { Shipping } from "@/entities/Shipping.js";
 import { User } from "@/entities/User.js";
 import { InitialSchema1790124561841 } from "@/migrations/1790124561841-InitialSchema.js";
+import { AddStructuredAddressToUsers1790124600000 } from "@/migrations/1790124600000-AddStructuredAddressToUsers.js";
 
 const { DB_HOST, DB_PORT, DB_USER, DB_PASS, DB_NAME } = process.env;
 
@@ -49,6 +50,6 @@ export const AppDataSource = new DataSource({
 		Shipping,
 		User,
 	],
-	migrations: [InitialSchema1790124561841],
+	migrations: [InitialSchema1790124561841, AddStructuredAddressToUsers1790124600000],
 	subscribers: [],
 });

@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { structuredAddressInputSchema } from "./address.schema";
 
-export const updateProfileSchema = z.object({
+const baseUpdateProfileSchema = z.object({
 	name: z
 		.string()
 		.min(2, "Nome deve ter pelo menos 2 caracteres")
@@ -14,6 +15,10 @@ export const updateProfileSchema = z.object({
 	description: z.string().max(500).optional().nullable(),
 	farm_name: z.string().max(150).optional().nullable(),
 });
+
+export const updateProfileSchema = baseUpdateProfileSchema.extend(
+	structuredAddressInputSchema.shape,
+);
 
 export const updatePasswordSchema = z
 	.object({
