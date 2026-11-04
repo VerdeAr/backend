@@ -60,6 +60,8 @@ export interface FormattedPurchase {
 		payment_method: string | null;
 	}[];
 	items: FormattedSaleItem[];
+	// Proposta do vendedor aguardando a resposta do cliente, ou null
+	pending_adjustment: FormattedSaleAdjustment | null;
 }
 
 export interface FormattedSellerOrder {
@@ -78,6 +80,7 @@ export interface FormattedSellerOrder {
 	items: FormattedSaleItem[];
 	seller_subtotal: number;
 	order_total: number;
+	has_pending_adjustment: boolean;
 }
 
 export interface FormattedStatusHistoryEntry {
@@ -332,7 +335,20 @@ export class SaleService {
 	 */
 	async getMyPurchases(customerId: string): Promise<FormattedPurchase[]> {
 		const sales = await saleRepository.findByCustomerId(customerId);
-		return sales.map((sale) => this.formatPurchase(sale));
+
+		// Propostas pendentes alimentam o banner de aprovação do histórico (RF-56)
+		const awaitingIds = sales
+			.filter((sale) => sale.status === SaleStatus.AGUARDANDO_APROVACAO_CLIENTE)
+			.map((sale) => sale.id);
+		const pendingAdjustments =
+			await saleAdjustmentRepository.findPendingBySaleIds(awaitingIds);
+
+		return sales.map((sale) =>
+			this.formatPurchase(
+				sale,
+				pendingAdjustments.find((adj) => adj.sale_id === sale.id) ?? null,
+			),
+		);
 	}
 
 	/**
@@ -346,7 +362,13 @@ export class SaleService {
 		if (!sale || sale.customer_id !== customerId) {
 			throw new AppError("Compra não encontrada.", 404);
 		}
-		return this.formatPurchase(sale);
+
+		const pendingAdjustment =
+			sale.status === SaleStatus.AGUARDANDO_APROVACAO_CLIENTE
+				? await saleAdjustmentRepository.findPendingBySaleId(sale.id)
+				: null;
+
+		return this.formatPurchase(sale, pendingAdjustment);
 	}
 
 	/**
@@ -375,6 +397,9 @@ export class SaleService {
 				items,
 				seller_subtotal: subtotal,
 				order_total: Number(Number(sale.total_amount).toFixed(2)),
+				// Há proposta pendente exatamente quando o pedido aguarda o cliente
+				has_pending_adjustment:
+					sale.status === SaleStatus.AGUARDANDO_APROVACAO_CLIENTE,
 			};
 		});
 	}
@@ -966,7 +991,10 @@ export class SaleService {
 		});
 	}
 
-	private formatPurchase(sale: Sale): FormattedPurchase {
+	private formatPurchase(
+		sale: Sale,
+		pendingAdjustment: SaleAdjustment | null = null,
+	): FormattedPurchase {
 		return {
 			id: sale.id,
 			delivery_type: sale.delivery_type,
@@ -974,6 +1002,9 @@ export class SaleService {
 			total_amount: Number(sale.total_amount),
 			created_at: sale.created_at,
 			updated_at: sale.updated_at,
+			pending_adjustment: pendingAdjustment
+				? this.formatAdjustment(pendingAdjustment, Number(sale.total_amount))
+				: null,
 			payments: (sale.payments || []).map((p) => ({
 				id: p.id,
 				amount: Number(p.amount),

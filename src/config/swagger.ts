@@ -795,6 +795,12 @@ export const swaggerDoc = {
 					total_amount: { type: "number", example: 39.5 },
 					created_at: { type: "string", format: "date-time" },
 					updated_at: { type: "string", format: "date-time" },
+					pending_adjustment: {
+						allOf: [{ $ref: "#/components/schemas/SaleAdjustment" }],
+						nullable: true,
+						description:
+							"Proposta de ajuste do vendedor aguardando a resposta do cliente (status AGUARDANDO_APROVACAO_CLIENTE); null quando não há",
+					},
 					payments: {
 						type: "array",
 						items: {
@@ -823,6 +829,7 @@ export const swaggerDoc = {
 					"total_amount",
 					"payments",
 					"items",
+					"pending_adjustment",
 				],
 			},
 			SellerOrder: {
@@ -868,6 +875,11 @@ export const swaggerDoc = {
 							"Total do pedido inteiro (inclui frete e itens de outros vendedores)",
 						example: 39.5,
 					},
+					has_pending_adjustment: {
+						type: "boolean",
+						description:
+							"true quando há proposta de ajuste aguardando o cliente (detalhes em `GET /vendedor/pedidos/{id}`)",
+					},
 				},
 				required: [
 					"id",
@@ -877,6 +889,7 @@ export const swaggerDoc = {
 					"items",
 					"seller_subtotal",
 					"order_total",
+					"has_pending_adjustment",
 				],
 			},
 			StatusHistoryEntry: {
