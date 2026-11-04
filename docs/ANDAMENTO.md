@@ -72,7 +72,7 @@ Resultado: os ambientes de **homologação** e **produção** estão no ar, com 
 | VER-78 — Avaliação pós-venda | Fazendo | VER-79 Feito (no `main`) | VER-80 A fazer | VER-81 A fazer |
 | VER-90 — Frete dinâmico com OpenRouteService e Leaflet | A fazer (a tarefa; as subtarefas já começaram) | VER-91 **Fazendo** | VER-92 **Fazendo** | VER-93 A fazer |
 | VER-66 — PDP | A fazer (o Jira não atualizou a tarefa) | VER-67 Feito (no `main`) | VER-68 Feito | VER-69 A fazer |
-| VER-51 — Data loaders do React Router | A fazer (a tarefa; o frontend já está entregue) | VER-52 A fazer | VER-53 Feito | VER-54 A fazer |
+| VER-51 — Data loaders do React Router | Fazendo | VER-52 **Revisão** (suporte a aliases de query e sanitização de vazios) | VER-53 Feito | VER-54 A fazer |
 
 ---
 

@@ -17,7 +17,10 @@ export const checkoutSchema = z.object({
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
 
 export const sellerOrdersQuerySchema = z.object({
-	status: z.nativeEnum(SaleStatus).optional(),
+	status: z.preprocess(
+		(val) => (typeof val === "string" && val.trim() === "" ? undefined : val),
+		z.nativeEnum(SaleStatus).optional(),
+	),
 });
 
 export type SellerOrdersQuery = z.infer<typeof sellerOrdersQuerySchema>;
