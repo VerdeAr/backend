@@ -3,7 +3,7 @@
 Retrato do que já foi entregue, do que está em andamento e do que está planejado para a API do VerdeAr.
 
 - **Fonte:** projeto `VER` no Jira, cruzado com o `main` do repositório.
-- **Posição:** 01/11/2026.
+- **Posição:** 04/11/2026.
 - **Atualização:** manual. Ao concluir uma tarefa, mova a linha de seção e ajuste `ARQUITETURA.md` e `README.md` (ver `.agents/AGENTS.md`).
 
 Legenda dos status do Jira: **Feito**, **Revisão** (code review), **Fazendo**, **A fazer**.
@@ -73,6 +73,7 @@ Resultado: os ambientes de **homologação** e **produção** estão no ar, com 
 | VER-90 — Frete dinâmico com OpenRouteService e Leaflet | A fazer (a tarefa; as subtarefas já começaram) | VER-91 **Fazendo** | VER-92 **Fazendo** | VER-93 A fazer |
 | VER-66 — PDP | A fazer (o Jira não atualizou a tarefa) | VER-67 Feito (no `main`) | VER-68 Feito | VER-69 A fazer |
 | VER-51 — Data loaders do React Router | Fazendo | VER-52 **Revisão** (suporte a aliases de query e sanitização de vazios) | VER-53 Feito | VER-54 A fazer |
+| VER-94 — Painel do vendedor e workflow de pedidos | A fazer (a tarefa; o backend já começou) | VER-95 **Fazendo** (branch `feat/VER-95-detalhe-pedido-ajuste-consentimento`: detalhe, máquina de estados, histórico, ajuste com consentimento e testes) | VER-96 A fazer | VER-97 A fazer |
 
 ---
 
@@ -85,7 +86,6 @@ Itens com trabalho de backend previsto, na ordem do Jira:
 | VER-70 — Perfil público do produtor | VER-71: endpoint público `GET /vendedores/:id`. |
 | VER-82 — E-mails transacionais com Resend | VER-83: integração do SDK Resend e templates. |
 | VER-86 — Imagens na Cloudflare R2 | VER-87: cliente S3 para R2 e geração de presigned URLs. |
-| VER-94 — Painel do vendedor e workflow de pedidos | VER-95: detalhe de pedido e workflow de ajustes com consentimento do cliente. |
 
 Itens sem trabalho de backend: VER-48 (subcomponentização do frontend) e VER-55 (`errorElement` e página 404).
 
@@ -94,6 +94,7 @@ Itens sem trabalho de backend: VER-48 (subcomponentização do frontend) e VER-5
 ## 5. Pendências conhecidas
 
 - **VER-108 (bug, A fazer):** os endpoints de chat expõem o hash da senha, o CPF, o e-mail e o telefone do outro participante da conversa. Precisa ser corrigido antes de o chat ser considerado concluído (VER-58).
+- A entidade `CartItem` declara `UNIQUE (cart_id, product_id)`, mas a constraint não existe no banco; o `migration:generate` sempre a propõe. Corrigir em uma migration própria ainda não tem tarefa.
 - O `POST /vendas/checkout` devolve a entidade crua da venda (pagamento como objeto e itens sem `product_name`), diferente do `GET /vendas/:id`. O frontend contorna isso buscando o pedido pelo ID. Ajustar para devolver a venda formatada ainda não tem tarefa.
 
 ---
@@ -109,7 +110,7 @@ Quando as tarefas abaixo forem entregues, revise estas partes de `ARQUITETURA.md
 | VER-58 | O servidor Socket.io (VER-59) já está no `main`. Depois da QA (VER-61) e da correção da VER-108, atualizar a visão de sistema, a autenticação e as limitações. |
 | VER-86 | `image_url` passa a apontar para o R2, com upload por URL pré-assinada. Atualizar catálogo, variáveis de ambiente e Docker. |
 | VER-82 | Novo serviço externo (Resend) e novas variáveis de ambiente. |
-| VER-94 | Novo estado ou fluxo de ajuste de pedido. Atualizar a máquina de estados de `Sale`. |
+| VER-94 | Feito na VER-95 (máquina de estados, histórico e ajustes em `ARQUITETURA.md` §6 e §8). Revisar após a QA da VER-97. |
 | VER-74 | Concluída a QA (VER-77), remover as ressalvas sobre o cookie e o token no corpo da resposta de login. |
 
 ---

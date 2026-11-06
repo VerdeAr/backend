@@ -1,3 +1,15 @@
+import { SaleStatus } from "@/entities/enums";
+
+// Status possíveis de uma venda (sales_status_enum)
+const SALE_STATUSES = Object.values(SaleStatus);
+
+// Máquina de estados do pedido para o vendedor (ver services/sale-status.ts)
+const SALE_TRANSITIONS_DESCRIPTION =
+	"Fluxo: ABERTA → EM_PREPARACAO → A_CAMINHO (só Entrega) → FINALIZADA; na Retirada, EM_PREPARACAO → FINALIZADA. " +
+	"ABERTA → FINALIZADA continua permitido. CANCELADA a partir de ABERTA, EM_PREPARACAO ou AGUARDANDO_APROVACAO_CLIENTE; " +
+	"ao cancelar, o estoque dos itens é devolvido uma única vez. Um pedido em AGUARDANDO_APROVACAO_CLIENTE só pode ser cancelado, " +
+	"e esse status só é alcançado pela proposta de ajuste. FINALIZADA e CANCELADA são finais.";
+
 // Parâmetro de caminho "id" (UUID) reutilizado pelas rotas com recurso identificado
 const idPathParameter = {
 	name: "id",
@@ -702,7 +714,7 @@ export const swaggerDoc = {
 					},
 					status: {
 						type: "string",
-						enum: ["ABERTA", "FINALIZADA", "CANCELADA"],
+						enum: SALE_STATUSES,
 						example: "ABERTA",
 					},
 					total_amount: {
@@ -778,11 +790,17 @@ export const swaggerDoc = {
 					delivery_type: { type: "string", enum: ["ENTREGA", "RETIRADA"] },
 					status: {
 						type: "string",
-						enum: ["ABERTA", "FINALIZADA", "CANCELADA"],
+						enum: SALE_STATUSES,
 					},
 					total_amount: { type: "number", example: 39.5 },
 					created_at: { type: "string", format: "date-time" },
 					updated_at: { type: "string", format: "date-time" },
+					pending_adjustment: {
+						allOf: [{ $ref: "#/components/schemas/SaleAdjustment" }],
+						nullable: true,
+						description:
+							"Proposta de ajuste do vendedor aguardando a resposta do cliente (status AGUARDANDO_APROVACAO_CLIENTE); null quando não há",
+					},
 					payments: {
 						type: "array",
 						items: {
@@ -811,6 +829,7 @@ export const swaggerDoc = {
 					"total_amount",
 					"payments",
 					"items",
+					"pending_adjustment",
 				],
 			},
 			SellerOrder: {
@@ -821,7 +840,7 @@ export const swaggerDoc = {
 					id: { type: "string", format: "uuid" },
 					status: {
 						type: "string",
-						enum: ["ABERTA", "FINALIZADA", "CANCELADA"],
+						enum: SALE_STATUSES,
 					},
 					delivery_type: { type: "string", enum: ["ENTREGA", "RETIRADA"] },
 					created_at: { type: "string", format: "date-time" },
@@ -856,6 +875,11 @@ export const swaggerDoc = {
 							"Total do pedido inteiro (inclui frete e itens de outros vendedores)",
 						example: 39.5,
 					},
+					has_pending_adjustment: {
+						type: "boolean",
+						description:
+							"true quando há proposta de ajuste aguardando o cliente (detalhes em `GET /vendedor/pedidos/{id}`)",
+					},
 				},
 				required: [
 					"id",
@@ -865,16 +889,198 @@ export const swaggerDoc = {
 					"items",
 					"seller_subtotal",
 					"order_total",
+					"has_pending_adjustment",
 				],
+			},
+			StatusHistoryEntry: {
+				type: "object",
+				description: "Entrada da linha do tempo de status do pedido",
+				properties: {
+					status: { type: "string", enum: SALE_STATUSES },
+					changed_at: { type: "string", format: "date-time" },
+					changed_by: {
+						type: "object",
+						nullable: true,
+						description:
+							"Quem fez a mudança; nulo nos registros anteriores ao histórico",
+						properties: {
+							id: { type: "string", format: "uuid" },
+							name: { type: "string" },
+						},
+					},
+				},
+				required: ["status", "changed_at"],
+			},
+			SaleAdjustment: {
+				type: "object",
+				description:
+					"Proposta de ajuste de itens ou pesagem feita pelo vendedor, com os valores atuais e os propostos",
+				properties: {
+					id: { type: "string", format: "uuid" },
+					reason: { type: "string", example: "Peso real do tomate: 1,8 kg" },
+					status: {
+						type: "string",
+						enum: ["PENDENTE", "ACEITO", "RECUSADO"],
+					},
+					previous_status: {
+						type: "string",
+						enum: SALE_STATUSES,
+						description: "Status ao qual o pedido volta se o cliente aceitar",
+					},
+					created_at: { type: "string", format: "date-time" },
+					items: {
+						type: "array",
+						items: {
+							type: "object",
+							properties: {
+								id: { type: "string", format: "uuid" },
+								sale_product_id: { type: "string", format: "uuid" },
+								product_id: { type: "string", format: "uuid", nullable: true },
+								product_name: { type: "string", example: "Tomate" },
+								original_quantity: { type: "number", example: 2 },
+								proposed_quantity: { type: "number", example: 1.8 },
+								original_unit_price: { type: "number", example: 9 },
+								proposed_unit_price: { type: "number", example: 9 },
+								original_total: { type: "number", example: 18 },
+								proposed_total: { type: "number", example: 16.2 },
+							},
+							required: [
+								"id",
+								"sale_product_id",
+								"product_name",
+								"original_quantity",
+								"proposed_quantity",
+								"original_unit_price",
+								"proposed_unit_price",
+								"original_total",
+								"proposed_total",
+							],
+						},
+					},
+					current_order_total: { type: "number", example: 30.5 },
+					proposed_order_total: {
+						type: "number",
+						description:
+							"Total do pedido se o ajuste for aceito (o frete não muda)",
+						example: 28.7,
+					},
+				},
+				required: [
+					"id",
+					"reason",
+					"status",
+					"previous_status",
+					"items",
+					"current_order_total",
+					"proposed_order_total",
+				],
+			},
+			SellerOrderDetail: {
+				type: "object",
+				description:
+					"Detalhe do pedido visto pelo vendedor: apenas os itens dele, com cliente, histórico e ajuste pendente",
+				properties: {
+					id: { type: "string", format: "uuid" },
+					status: { type: "string", enum: SALE_STATUSES },
+					delivery_type: { type: "string", enum: ["ENTREGA", "RETIRADA"] },
+					created_at: { type: "string", format: "date-time" },
+					updated_at: { type: "string", format: "date-time" },
+					payment_method: { type: "string", nullable: true, example: "PIX" },
+					customer: {
+						type: "object",
+						properties: {
+							id: { type: "string", format: "uuid" },
+							name: { type: "string" },
+							email: { type: "string", format: "email" },
+							phone: { type: "string", nullable: true },
+							address: { type: "string", nullable: true },
+							neighborhood: { type: "string", nullable: true },
+						},
+						required: ["id", "name", "email"],
+					},
+					items: {
+						type: "array",
+						items: { $ref: "#/components/schemas/FormattedSaleItem" },
+					},
+					seller_subtotal: { type: "number", example: 27 },
+					order_total: { type: "number", example: 39.5 },
+					status_history: {
+						type: "array",
+						items: { $ref: "#/components/schemas/StatusHistoryEntry" },
+					},
+					pending_adjustment: {
+						allOf: [{ $ref: "#/components/schemas/SaleAdjustment" }],
+						nullable: true,
+					},
+				},
+				required: [
+					"id",
+					"status",
+					"delivery_type",
+					"customer",
+					"items",
+					"seller_subtotal",
+					"order_total",
+					"status_history",
+					"pending_adjustment",
+				],
+			},
+			ProposeAdjustmentInput: {
+				type: "object",
+				properties: {
+					reason: {
+						type: "string",
+						minLength: 1,
+						maxLength: 500,
+						example: "Peso real do tomate após a pesagem: 1,8 kg",
+					},
+					items: {
+						type: "array",
+						minItems: 1,
+						description:
+							"Itens do próprio vendedor a ajustar, sem repetição. Só a quantidade muda; o preço unitário da compra é mantido.",
+						items: {
+							type: "object",
+							properties: {
+								sale_product_id: {
+									type: "string",
+									format: "uuid",
+									description: "ID do item do pedido (`items[].id` no detalhe)",
+								},
+								quantity: {
+									type: "number",
+									exclusiveMinimum: true,
+									minimum: 0,
+									description:
+										"Nova quantidade, maior que zero, com até 3 casas decimais",
+									example: 1.8,
+								},
+							},
+							required: ["sale_product_id", "quantity"],
+						},
+					},
+				},
+				required: ["reason", "items"],
+			},
+			RespondAdjustmentInput: {
+				type: "object",
+				properties: {
+					aceitar: {
+						type: "boolean",
+						description:
+							"true aplica o ajuste; false recusa e cancela o pedido",
+						example: true,
+					},
+				},
+				required: ["aceitar"],
 			},
 			UpdateSaleStatusInput: {
 				type: "object",
 				properties: {
 					status: {
 						type: "string",
-						enum: ["ABERTA", "FINALIZADA", "CANCELADA"],
-						description:
-							"Transições válidas: ABERTA → FINALIZADA ou ABERTA → CANCELADA. Enviar o mesmo status atual não altera nada.",
+						enum: SALE_STATUSES,
+						description: `${SALE_TRANSITIONS_DESCRIPTION} Enviar o mesmo status atual não altera nada.`,
 						example: "FINALIZADA",
 					},
 				},
@@ -2300,13 +2506,65 @@ export const swaggerDoc = {
 				},
 			},
 		},
+		"/vendas/{id}/responder-ajuste": {
+			post: {
+				tags: ["Vendas e Checkout"],
+				summary: "Responder à proposta de ajuste (cliente)",
+				description:
+					"Ação exclusiva do cliente da compra, executada em uma única transação. " +
+					"**Aceitar** aplica as novas quantidades, acerta o estoque pela diferença, recalcula o total (o frete não muda), " +
+					"atualiza o pagamento registrado e devolve o pedido ao status anterior à proposta. " +
+					"**Recusar** cancela o pedido inteiro e devolve o estoque de todos os itens. " +
+					"Duas respostas simultâneas: só a primeira vale; a outra recebe 409.",
+				security: authenticated,
+				parameters: [idPathParameter],
+				requestBody: {
+					required: true,
+					content: {
+						"application/json": {
+							schema: { $ref: "#/components/schemas/RespondAdjustmentInput" },
+						},
+					},
+				},
+				responses: {
+					200: {
+						description: "Resposta registrada; retorna a compra atualizada",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/Purchase" },
+							},
+						},
+					},
+					400: { $ref: "#/components/responses/ValidationError" },
+					401: { $ref: "#/components/responses/Unauthorized" },
+					404: {
+						description:
+							"Compra inexistente ou de outro cliente (a existência não é revelada)",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					409: {
+						description:
+							"Não há proposta pendente (inclui uma resposta já dada) ou o estoque não cobre mais o aumento proposto",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+				},
+			},
+		},
 		"/vendas/{id}/status": {
 			patch: {
 				tags: ["Vendas e Checkout"],
 				summary: "Alterar o status de uma venda (vendedor)",
 				description:
 					"Equivalente a `PATCH /vendedor/pedidos/{id}/status` (mesmo comportamento e resposta); é a rota usada pelo frontend. " +
-					"Apenas vendedores com produtos na venda podem alterá-la. ABERTA → FINALIZADA ou ABERTA → CANCELADA; ao cancelar, o estoque dos itens é devolvido.",
+					`Apenas vendedores com produtos na venda podem alterá-la. ${SALE_TRANSITIONS_DESCRIPTION}`,
 				security: authenticated,
 				parameters: [idPathParameter],
 				requestBody: {
@@ -2329,7 +2587,7 @@ export const swaggerDoc = {
 					},
 					400: {
 						description:
-							"Dados inválidos ou venda já finalizada ou cancelada (estados finais não mudam)",
+							"Dados inválidos, transição não permitida pela máquina de estados ou venda já finalizada ou cancelada",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
@@ -2371,7 +2629,7 @@ export const swaggerDoc = {
 						required: false,
 						schema: {
 							type: "string",
-							enum: ["ABERTA", "FINALIZADA", "CANCELADA"],
+							enum: SALE_STATUSES,
 						},
 						description: "Filtrar por status",
 					},
@@ -2398,7 +2656,8 @@ export const swaggerDoc = {
 		"/vendedor/pedidos/pendentes/count": {
 			get: {
 				tags: ["Vendedor - Pedidos"],
-				summary: "Contar os pedidos pendentes (ABERTA) do vendedor",
+				summary:
+					"Contar os pedidos que aguardam ação do vendedor (ABERTA e EM_PREPARACAO)",
 				security: authenticated,
 				responses: {
 					200: {
@@ -2418,13 +2677,120 @@ export const swaggerDoc = {
 				},
 			},
 		},
+		"/vendedor/pedidos/{id}": {
+			get: {
+				tags: ["Vendedor - Pedidos"],
+				summary: "Detalhar um pedido do vendedor",
+				description:
+					"Mostra apenas os itens do vendedor logado, os dados de contato e entrega do cliente (sem senha nem CPF), " +
+					"a forma de pagamento, a linha do tempo de status e a proposta de ajuste pendente, se houver.",
+				security: authenticated,
+				parameters: [idPathParameter],
+				responses: {
+					200: {
+						description: "Detalhe do pedido",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/SellerOrderDetail" },
+							},
+						},
+					},
+					400: { $ref: "#/components/responses/ValidationError" },
+					401: { $ref: "#/components/responses/Unauthorized" },
+					403: {
+						description:
+							"Permissão restrita a vendedores ou pedido sem produtos do vendedor",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					404: {
+						description: "Pedido ou perfil de vendedor não encontrado",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+				},
+			},
+		},
+		"/vendedor/pedidos/{id}/propor-ajuste": {
+			post: {
+				tags: ["Vendedor - Pedidos"],
+				summary: "Propor ajuste de itens ou pesagem ao cliente",
+				description:
+					"Só para pedidos ABERTA ou EM_PREPARACAO e só para os itens do vendedor. O pedido passa a AGUARDANDO_APROVACAO_CLIENTE " +
+					"e guarda o status anterior. Total, pagamento e estoque **não mudam** até o cliente aceitar. Um aumento de quantidade " +
+					"precisa caber no estoque disponível. Existe no máximo uma proposta pendente por pedido.",
+				security: authenticated,
+				parameters: [idPathParameter],
+				requestBody: {
+					required: true,
+					content: {
+						"application/json": {
+							schema: { $ref: "#/components/schemas/ProposeAdjustmentInput" },
+						},
+					},
+				},
+				responses: {
+					201: {
+						description:
+							"Proposta criada; retorna o detalhe do pedido com `pending_adjustment`",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/SellerOrderDetail" },
+							},
+						},
+					},
+					400: {
+						description:
+							"Dados inválidos (lista de campos), item fora do pedido, quantidade igual à atual, aumento acima do estoque " +
+							"ou status que não permite ajuste",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					401: { $ref: "#/components/responses/Unauthorized" },
+					403: {
+						description:
+							"Permissão restrita a vendedores, pedido sem produtos do vendedor ou item de outro vendedor",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					404: {
+						description: "Pedido ou perfil de vendedor não encontrado",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					409: {
+						description: "Já existe uma proposta pendente para o pedido",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+				},
+			},
+		},
 		"/vendedor/pedidos/{id}/status": {
 			patch: {
 				tags: ["Vendedor - Pedidos"],
 				summary: "Alterar o status de um pedido do vendedor",
 				description:
 					"Equivalente a `PATCH /vendas/{id}/status` (mesmo comportamento e resposta). " +
-					"ABERTA → FINALIZADA ou ABERTA → CANCELADA; ao cancelar, o estoque dos itens é devolvido.",
+					SALE_TRANSITIONS_DESCRIPTION,
 				security: authenticated,
 				parameters: [idPathParameter],
 				requestBody: {

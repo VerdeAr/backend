@@ -13,6 +13,8 @@ saleRoutes.use(ensureAuthenticated);
 saleRoutes.post("/checkout", saleController.checkout);
 saleRoutes.get("/minhas-compras", saleController.getMyPurchases);
 saleRoutes.get("/:id", saleController.getPurchaseById);
+// Só o cliente da compra responde; qualquer papel pode ser o comprador
+saleRoutes.post("/:id/responder-ajuste", saleController.respondAdjustment);
 
 // Rota de alteração de status (acessível por vendedores)
 saleRoutes.patch(

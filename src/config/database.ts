@@ -14,11 +14,15 @@ import { PaymentMethod } from "@/entities/PaymentMethod.js";
 import { Product } from "@/entities/Product.js";
 import { Review } from "@/entities/Review.js";
 import { Sale } from "@/entities/Sale.js";
+import { SaleAdjustment } from "@/entities/SaleAdjustment.js";
+import { SaleAdjustmentItem } from "@/entities/SaleAdjustmentItem.js";
 import { SaleProduct } from "@/entities/SaleProduct.js";
+import { SaleStatusHistory } from "@/entities/SaleStatusHistory.js";
 import { Seller } from "@/entities/Seller.js";
 import { Shipping } from "@/entities/Shipping.js";
 import { User } from "@/entities/User.js";
 import { InitialSchema1790124561841 } from "@/migrations/1790124561841-InitialSchema.js";
+import { SaleAdjustmentsAndStatusHistory1793827055534 } from "@/migrations/1793827055534-SaleAdjustmentsAndStatusHistory.js";
 
 const { DB_HOST, DB_PORT, DB_USER, DB_PASS, DB_NAME } = process.env;
 
@@ -44,11 +48,17 @@ export const AppDataSource = new DataSource({
 		Product,
 		Review,
 		Sale,
+		SaleAdjustment,
+		SaleAdjustmentItem,
 		SaleProduct,
+		SaleStatusHistory,
 		Seller,
 		Shipping,
 		User,
 	],
-	migrations: [InitialSchema1790124561841],
+	migrations: [
+		InitialSchema1790124561841,
+		SaleAdjustmentsAndStatusHistory1793827055534,
+	],
 	subscribers: [],
 });

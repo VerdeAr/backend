@@ -5,7 +5,7 @@ Requisitos do produto, com o estado de cada um. O VerdeAr é um marketplace que 
 > Este arquivo é o mesmo nos repositórios `backend` e `frontend`. Ao alterá-lo em um, replique no outro.
 
 - **Fontes:** Notion (*Visão Geral do Produto* e *Regras de Negócio & Glossário*), Jira (projeto `VER`) e o código do `main`.
-- **Posição:** 21/10/2026.
+- **Posição:** 04/11/2026.
 - **Relacionados:** [ANDAMENTO.md](ANDAMENTO.md) (andamento por tarefa) e [ARQUITETURA.md](ARQUITETURA.md) (como está construído).
 
 **Como ler**
@@ -94,11 +94,11 @@ Requisitos do produto, com o estado de cada um. O VerdeAr é um marketplace que 
 |---|---|:-:|---|---|
 | RF-50 | O Vendedor lista os pedidos que contêm produtos seus, com filtro por status, e vê o subtotal da sua parte. | B, F | Implementado | VER-41 |
 | RF-51 | O Vendedor vê o contador de pedidos pendentes no cabeçalho. | B, F | Implementado | VER-41 |
-| RF-52 | Só o Vendedor altera o status: `ABERTA → FINALIZADA` ou `ABERTA → CANCELADA`. Estados finais não mudam. | B, F | Implementado | VER-41 |
-| RF-53 | Ao cancelar um pedido, o estoque dos itens é devolvido. | B | Implementado | VER-41 |
-| RF-54 | O Vendedor tem página de detalhe do pedido (`/vendedor/pedidos/:id`) com linha do tempo, dados do cliente e rota de entrega. | B, F | Planejado | VER-94 |
-| RF-55 | O workflow do pedido ganha as etapas Recebido, Em Preparação, A Caminho e Concluído. | B, F | Planejado | VER-94 |
-| RF-56 | O Vendedor propõe ajuste de itens ou pesagem, e o cliente aprova ou recusa por um banner no histórico; não há alteração unilateral. | B, F | Planejado | VER-94 |
+| RF-52 | Só o Vendedor altera o status, seguindo a máquina de estados do pedido (RF-55). `FINALIZADA` e `CANCELADA` são finais. | B, F | Implementado (novas transições: Parcial) | VER-41, VER-95 |
+| RF-53 | Ao cancelar um pedido, o estoque dos itens é devolvido uma única vez, mesmo com cancelamentos simultâneos. | B | Implementado | VER-41, VER-95 |
+| RF-54 | O Vendedor tem página de detalhe do pedido (`/vendedor/pedidos/:id`) com linha do tempo, dados do cliente e rota de entrega. | B, F | Parcial (API `GET /vendedor/pedidos/:id` pronta; tela na VER-96) | VER-95, VER-96 |
+| RF-55 | O workflow do pedido ganha as etapas Recebido (`ABERTA`), Em Preparação, A Caminho (só Entrega) e Concluído (`FINALIZADA`). | B, F | Parcial (backend pronto; tela na VER-96) | VER-95, VER-96 |
+| RF-56 | O Vendedor propõe ajuste de quantidade ou pesagem, e o cliente aprova ou recusa por um banner no histórico; não há alteração unilateral. Aceitar atualiza quantidades, total, pagamento e estoque; recusar cancela o pedido. | B, F | Parcial (API de proposta e resposta pronta; telas na VER-96) | VER-95, VER-96 |
 | RF-57 | O Vendedor recebe e-mail de novo pedido e o cliente recebe e-mail a cada atualização de status. | B | Planejado | VER-82 |
 
 ### 2.7 Avaliações
@@ -169,7 +169,8 @@ As regras completas (RN-01 a RN-53) e o glossário estão no Notion, na página 
 - **Usuário:** CPF e e-mail únicos; o perfil (Cliente ou Vendedor) não muda após o cadastro; o Vendedor também compra e avalia como Cliente.
 - **Produto:** nome, preço, unidade e estoque são obrigatórios; estoque nunca é negativo; produto inativo não aparece na vitrine nem entra no carrinho; o preço é gravado no momento da compra.
 - **Frete:** só existe na modalidade Entrega; o valor é registrado no pedido e não muda depois.
-- **Pedido:** nasce `ABERTA`; só o Vendedor leva a `FINALIZADA` ou `CANCELADA`; esses estados são finais; o Vendedor vê só os pedidos com produtos seus.
+- **Pedido:** nasce `ABERTA`; só o Vendedor avança (Em Preparação, A Caminho na Entrega, Concluído) ou cancela; `FINALIZADA` e `CANCELADA` são finais; o Vendedor vê só os pedidos com produtos seus.
+- **Ajuste:** o Vendedor propõe e o Cliente aprova ou recusa; uma proposta pendente por pedido; só a quantidade muda (o preço da compra é mantido); recusar cancela o pedido inteiro.
 - **Avaliação:** só em pedido `FINALIZADA`, uma por pedido, nota de 1 a 5, comentário opcional, sem edição.
 - **Acesso:** funções de Vendedor são bloqueadas para Clientes; cada usuário vê apenas os próprios dados e pedidos.
 

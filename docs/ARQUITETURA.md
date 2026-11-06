@@ -16,7 +16,7 @@ Escopo migrado e ativo:
 | Catálogo | `Product`, `Category` e `MeasurementUnit`. Busca pública paginada e CRUD restrito ao vendedor, com estoque e status ativo/inativo. |
 | Carrinho | `Cart` e `CartItem` persistidos no banco (um carrinho por usuário), com frete calculado por produtor. |
 | Checkout | `Sale`, `SaleProduct` e `Payment` criados em uma transação, com lock pessimista de estoque. |
-| Pedidos do vendedor | Listagem filtrável por status, contador de pendentes e mudança de status com estorno de estoque no cancelamento. |
+| Pedidos do vendedor | Listagem filtrável por status, detalhe com linha do tempo, contador de pendentes, máquina de estados (Recebido, Em Preparação, A Caminho, Concluído) com estorno atômico no cancelamento e ajuste de itens com consentimento do cliente (VER-95). |
 | Avaliações | Criação por clientes em vendas finalizadas e listagem pública por vendedor ou produto. |
 | Documentação | OpenAPI 3.0 com interface em `/docs` e especificação em `/docs.json`, cobrindo todas as rotas ativas. |
 
@@ -123,6 +123,12 @@ erDiagram
     PRODUCT ||--o{ SALE_PRODUCT : "vendido em"
     SALE ||--o{ PAYMENT : "pago por"
     PAYMENT_METHOD ||--o{ PAYMENT : "forma"
+    SALE ||--o{ SALE_STATUS_HISTORY : "linha do tempo"
+    USER ||--o{ SALE_STATUS_HISTORY : "alterou"
+    SALE ||--o{ SALE_ADJUSTMENT : "propostas de ajuste"
+    SELLER ||--o{ SALE_ADJUSTMENT : "propõe"
+    SALE_ADJUSTMENT ||--|{ SALE_ADJUSTMENT_ITEM : "itens"
+    SALE_PRODUCT ||--o{ SALE_ADJUSTMENT_ITEM : "ajustado em"
     SALE ||--o| REVIEW : "avaliada por"
     USER ||--o{ REVIEW : "escreve"
     USER ||--o{ CHAT : "cliente"
@@ -137,11 +143,13 @@ Pontos importantes do modelo:
 - **Chaves:** todas as tabelas usam `uuid` e têm `created_at` e `updated_at`.
 - **Quantidades e preços:** `stock` e `quantity` são `numeric(10,3)` (aceitam frações, como 0,5 kg); `price`, `unit_price`, `total_amount` e `fixed_shipping_rate` são `numeric(10,2)`.
 - **Unicidade:** `users.email`, `users.cpf`, `sellers.user_id`, `carts.user_id`, `categories.name`, `measurement_units.name` e `payment_methods.description`. O CNPJ é verificado como único pelo `AuthService`, não por constraint.
-- **Enums no banco:** `users_role_enum` (`CLIENTE`, `VENDEDOR`), `carts_delivery_type_enum` e `sales_delivery_type_enum` (`ENTREGA`, `RETIRADA`), `sales_status_enum` (`ABERTA`, `FINALIZADA`, `CANCELADA`) e `chats_status_enum` (`ATIVO`, `FINALIZADO`).
+- **Enums no banco:** `users_role_enum` (`CLIENTE`, `VENDEDOR`), `carts_delivery_type_enum` e `sales_delivery_type_enum` (`ENTREGA`, `RETIRADA`), `sales_status_enum` (`ABERTA`, `EM_PREPARACAO`, `A_CAMINHO`, `AGUARDANDO_APROVACAO_CLIENTE`, `FINALIZADA`, `CANCELADA`), `sale_adjustments_status_enum` (`PENDENTE`, `ACEITO`, `RECUSADO`) e `chats_status_enum` (`ATIVO`, `FINALIZADO`). O `sales_status_enum` também é usado por `sale_status_history.status` e `sale_adjustments.previous_status`.
+- **Histórico de status:** `sale_status_history` guarda cada mudança do pedido (status, data e `changed_by_id`, que é nulo nos registros migrados de pedidos antigos).
+- **Ajustes:** `sale_adjustments` guarda a proposta (motivo, vendedor, status, `previous_status` e `responded_at`) e `sale_adjustment_items` guarda a quantidade e o preço originais e propostos de cada item. O índice único parcial `UQ_sale_adjustments_pending_sale` garante **no máximo uma proposta `PENDENTE` por pedido**.
 - **Integridade referencial:** `sales.customer_id` e `sale_products.product_id` usam `ON DELETE RESTRICT`, preservando o histórico de pedidos. As demais relações usam `CASCADE` ou `SET NULL`.
 - **Avaliação única por venda:** garantida na camada de service; não há constraint `UNIQUE` em `reviews.sale_id`.
 - **Frete fixo:** fica em `users.fixed_shipping_rate` (inicia em R$ 0,00 para vendedores).
-- **Migrations:** hoje existe uma única migration (`InitialSchema1790124561841`), registrada manualmente em `config/database.ts`. Novas migrations precisam ser adicionadas à lista `migrations` do DataSource.
+- **Migrations:** `InitialSchema1790124561841` e `SaleAdjustmentsAndStatusHistory1793827055534` (VER-95: novos status, ajustes, histórico e backfill do histórico dos pedidos existentes), registradas manualmente em `config/database.ts`. Novas migrations precisam ser adicionadas à lista `migrations` do DataSource.
 
 ---
 
@@ -166,7 +174,8 @@ Pontos importantes do modelo:
 | Criar avaliação | | ✔ | ✔ |
 | `/pessoa/frete` | | | ✔ |
 | `/vendedor/produtos` (CRUD, ativar/desativar) | | | ✔ |
-| `/vendedor/pedidos` e mudança de status | | | ✔ |
+| `/vendedor/pedidos` (lista, detalhe, mudança de status e proposta de ajuste) | | | ✔ |
+| `POST /vendas/:id/responder-ajuste` (só o cliente da compra) | | ✔ | ✔ |
 
 ---
 
@@ -197,13 +206,52 @@ Executado em uma única transação (`SaleService.checkout`):
 2. Define entrega (corpo ou carrinho) e pagamento (corpo, carrinho ou `Dinheiro` como padrão).
 3. Para cada item, aplica `pessimistic_write` no produto, valida existência, status ativo e estoque, e decrementa o estoque.
 4. Calcula subtotal, frete por produtor e total.
-5. Cria `Sale` (`ABERTA`), `SaleProduct` com o preço unitário congelado e `Payment`.
+5. Cria `Sale` (`ABERTA`), a primeira entrada do histórico de status, `SaleProduct` com o preço unitário congelado e `Payment`.
 6. Esvazia o carrinho. Qualquer falha desfaz tudo.
 
 ### Pedidos
-- O vendedor vê apenas pedidos que contêm produtos seus, com o subtotal da sua parte e o total do pedido.
-- Transições: `ABERTA → FINALIZADA` ou `ABERTA → CANCELADA`, feitas só por vendedor com produto no pedido. Estados finais não mudam.
-- No cancelamento, o estoque dos itens é devolvido sob lock pessimista, na mesma transação.
+- O vendedor vê apenas pedidos que contêm produtos seus, com o subtotal da sua parte e o total do pedido. A lista indica `has_pending_adjustment`.
+- O detalhe (`GET /vendedor/pedidos/:id`) traz só os itens do vendedor, os dados de contato e entrega do cliente (campos selecionados explicitamente, sem senha nem CPF), a forma de pagamento, a linha do tempo e a proposta pendente.
+- O contador de pendentes conta os pedidos que pedem ação do vendedor: `ABERTA` e `EM_PREPARACAO`.
+
+#### Máquina de estados
+
+As regras ficam em `services/sale-status.ts`. Só vendedor com produto no pedido altera o status.
+
+```mermaid
+stateDiagram-v2
+    [*] --> ABERTA: checkout
+    ABERTA --> EM_PREPARACAO
+    ABERTA --> FINALIZADA: compatibilidade
+    EM_PREPARACAO --> A_CAMINHO: só Entrega
+    EM_PREPARACAO --> FINALIZADA: só Retirada
+    A_CAMINHO --> FINALIZADA
+    ABERTA --> AGUARDANDO_APROVACAO_CLIENTE: proposta de ajuste
+    EM_PREPARACAO --> AGUARDANDO_APROVACAO_CLIENTE: proposta de ajuste
+    AGUARDANDO_APROVACAO_CLIENTE --> ABERTA: cliente aceita (status anterior)
+    AGUARDANDO_APROVACAO_CLIENTE --> EM_PREPARACAO: cliente aceita (status anterior)
+    AGUARDANDO_APROVACAO_CLIENTE --> CANCELADA: cliente recusa ou vendedor cancela
+    ABERTA --> CANCELADA
+    EM_PREPARACAO --> CANCELADA
+    FINALIZADA --> [*]
+    CANCELADA --> [*]
+```
+
+- Enviar o status atual não altera nada. Transição fora do diagrama devolve 400.
+- `AGUARDANDO_APROVACAO_CLIENTE` só é alcançado pela proposta e só sai pela resposta do cliente ou pelo cancelamento do vendedor (que encerra a proposta como `RECUSADO`).
+- Toda mudança grava uma entrada em `sale_status_history` com quem a fez.
+
+#### Concorrência e estoque
+- Mudança de status, proposta e resposta bloqueiam a linha do pedido (`pessimistic_write`) antes de ler o status. O lock é feito sem joins, porque o PostgreSQL não aceita `FOR UPDATE` no lado anulável de um `LEFT JOIN`; os itens são carregados depois.
+- Isso serializa operações concorrentes no mesmo pedido: o estoque é devolvido **uma única vez** mesmo com cancelamentos simultâneos, e de duas respostas ao ajuste só a primeira vale (a outra recebe 409).
+- Os produtos são bloqueados em ordem de ID para evitar deadlock.
+
+#### Ajuste com consentimento (RF-56)
+- **Proposta** (`POST /vendedor/pedidos/:id/propor-ajuste`): só em `ABERTA` ou `EM_PREPARACAO` e só nos itens do vendedor. Muda apenas a quantidade (o preço unitário da compra é mantido, RNF-08), sem remover item. Um aumento precisa caber no estoque. O pedido vai a `AGUARDANDO_APROVACAO_CLIENTE` e guarda o `previous_status`; total, pagamento e estoque **não mudam**.
+- **Aceite** (`POST /vendas/:id/responder-ajuste` com `aceitar: true`): em uma transação, aplica as quantidades, acerta o estoque pela diferença (falta de estoque devolve 409), recalcula o `total_amount` mantendo o frete, atualiza o `Payment` e volta ao `previous_status`.
+- **Recusa** (`aceitar: false`): cancela o **pedido inteiro**, inclusive em pedido com mais de um vendedor, e devolve o estoque de todos os itens.
+- O cliente vê a proposta pendente em `pending_adjustment` no histórico de compras e no detalhe da compra. Pedido de outro cliente devolve 404, sem revelar que existe.
+- Não há prazo para o cliente responder.
 
 ### Avaliações
 - Só o cliente dono da venda avalia, apenas vendas `FINALIZADA` e uma vez por venda.
@@ -248,6 +296,7 @@ O `HEALTHCHECK` do `Dockerfile` consulta `/ready`, e o `monitoring.yml` faz o me
 
 - **Sem refresh token** e sem revogação de token no logout.
 - **Frete por bairro** está modelado, mas sem API.
+- **`cart_items`:** a entidade `CartItem` declara `UNIQUE (cart_id, product_id)`, mas a constraint não existe no banco (a `InitialSchema` não a cria). O `migration:generate` sempre a propõe; ela não entrou na migration da VER-95 por estar fora do escopo.
 - **`DB_*` e `JWT_SECRET`** usam `process.env` sem validação de presença na inicialização; valores ausentes só falham em tempo de execução. Em `server.ts`, uma falha ao conectar no banco apenas registra o erro, sem encerrar o processo.
 
 ---

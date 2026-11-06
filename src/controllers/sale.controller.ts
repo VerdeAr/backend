@@ -1,6 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
 import {
 	checkoutSchema,
+	proposeAdjustmentSchema,
+	respondAdjustmentSchema,
 	saleIdParamSchema,
 	sellerOrdersQuerySchema,
 	updateSaleStatusSchema,
@@ -53,6 +55,26 @@ export class SaleController {
 	}
 
 	/**
+	 * POST /vendas/:id/responder-ajuste
+	 * Cliente aceita ou recusa a proposta de ajuste pendente da própria compra.
+	 */
+	async respondAdjustment(req: Request, res: Response, next: NextFunction) {
+		try {
+			const customerId = req.user!.id;
+			const { id } = saleIdParamSchema.parse(req.params);
+			const { aceitar } = respondAdjustmentSchema.parse(req.body);
+			const purchase = await saleService.respondAdjustment(
+				customerId,
+				id,
+				aceitar,
+			);
+			return res.status(200).json(purchase);
+		} catch (error) {
+			next(error);
+		}
+	}
+
+	/**
 	 * GET /vendedor/pedidos
 	 * Retorna os pedidos recebidos pelo vendedor (com suporte a filtro por status).
 	 */
@@ -68,8 +90,39 @@ export class SaleController {
 	}
 
 	/**
+	 * GET /vendedor/pedidos/:id
+	 * Retorna o detalhe do pedido na visão do vendedor (itens dele, cliente, histórico e ajuste pendente).
+	 */
+	async getSellerOrderDetail(req: Request, res: Response, next: NextFunction) {
+		try {
+			const sellerUserId = req.user!.id;
+			const { id } = saleIdParamSchema.parse(req.params);
+			const order = await saleService.getSellerOrderDetail(sellerUserId, id);
+			return res.status(200).json(order);
+		} catch (error) {
+			next(error);
+		}
+	}
+
+	/**
+	 * POST /vendedor/pedidos/:id/propor-ajuste
+	 * Vendedor propõe ajuste de quantidade ou pesagem; o pedido aguarda a aprovação do cliente.
+	 */
+	async proposeAdjustment(req: Request, res: Response, next: NextFunction) {
+		try {
+			const sellerUserId = req.user!.id;
+			const { id } = saleIdParamSchema.parse(req.params);
+			const data = proposeAdjustmentSchema.parse(req.body);
+			const order = await saleService.proposeAdjustment(sellerUserId, id, data);
+			return res.status(201).json(order);
+		} catch (error) {
+			next(error);
+		}
+	}
+
+	/**
 	 * GET /vendedor/pedidos/pendentes/count
-	 * Retorna o número de pedidos no status ABERTA para notificações do vendedor.
+	 * Retorna o número de pedidos que aguardam ação do vendedor (ABERTA e EM_PREPARACAO).
 	 */
 	async countPendingOrders(req: Request, res: Response, next: NextFunction) {
 		try {
@@ -83,7 +136,7 @@ export class SaleController {
 
 	/**
 	 * PATCH /vendas/:id/status
-	 * Atualiza o status do pedido para FINALIZADA ou CANCELADA (estornando estoque).
+	 * Atualiza o status do pedido conforme a máquina de estados (estornando estoque ao cancelar).
 	 */
 	async updateStatus(req: Request, res: Response, next: NextFunction) {
 		try {

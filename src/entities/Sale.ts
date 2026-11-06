@@ -11,7 +11,9 @@ import {
 import { DeliveryType, SaleStatus } from "./enums";
 import type { Payment } from "./Payment";
 import type { Review } from "./Review";
+import type { SaleAdjustment } from "./SaleAdjustment";
 import type { SaleProduct } from "./SaleProduct";
+import type { SaleStatusHistory } from "./SaleStatusHistory";
 import { User } from "./User";
 
 @Entity("sales")
@@ -51,6 +53,12 @@ export class Sale {
 
 	@OneToMany("Review", "sale")
 	reviews!: Review[];
+
+	@OneToMany("SaleAdjustment", "sale")
+	adjustments!: SaleAdjustment[];
+
+	@OneToMany("SaleStatusHistory", "sale")
+	status_history!: SaleStatusHistory[];
 
 	@CreateDateColumn()
 	created_at!: Date;
