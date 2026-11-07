@@ -26,7 +26,7 @@ export class ProductService {
 		const orderBy = query.orderBy ?? "created_at";
 		const orderDir = query.orderDir ?? "DESC";
 
-		return productRepository.findFiltered({
+		const paginated = await productRepository.findFiltered({
 			categoryId,
 			sellerId,
 			search,
@@ -36,6 +36,22 @@ export class ProductService {
 			orderBy,
 			orderDir,
 		});
+
+		const productIds = paginated.data.map((p) => p.id);
+		const statsMap = await reviewRepository.getProductsRatingStats(productIds);
+
+		const dataWithStats = paginated.data.map((product) => {
+			const stats = statsMap.get(product.id) || {
+				average_rating: 0,
+				review_count: 0,
+			};
+			return { ...product, ...stats };
+		});
+
+		return {
+			...paginated,
+			data: dataWithStats,
+		};
 	}
 
 	async getById(id: string) {

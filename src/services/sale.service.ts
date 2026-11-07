@@ -47,6 +47,13 @@ export interface FormattedSaleItem {
 	} | null;
 }
 
+export interface FormattedPurchaseReview {
+	id: string;
+	rating: number;
+	comment: string | null;
+	created_at: Date;
+}
+
 export interface FormattedPurchase {
 	id: string;
 	delivery_type: DeliveryType;
@@ -54,6 +61,8 @@ export interface FormattedPurchase {
 	total_amount: number;
 	created_at: Date;
 	updated_at: Date;
+	is_reviewed: boolean;
+	review: FormattedPurchaseReview | null;
 	payments: {
 		id: string;
 		amount: number;
@@ -995,6 +1004,16 @@ export class SaleService {
 		sale: Sale,
 		pendingAdjustment: SaleAdjustment | null = null,
 	): FormattedPurchase {
+		const review =
+			sale.reviews && sale.reviews.length > 0
+				? {
+						id: sale.reviews[0].id,
+						rating: Number(sale.reviews[0].rating),
+						comment: sale.reviews[0].comment,
+						created_at: sale.reviews[0].created_at,
+					}
+				: null;
+
 		return {
 			id: sale.id,
 			delivery_type: sale.delivery_type,
@@ -1002,6 +1021,8 @@ export class SaleService {
 			total_amount: Number(sale.total_amount),
 			created_at: sale.created_at,
 			updated_at: sale.updated_at,
+			is_reviewed: Boolean(review),
+			review,
 			pending_adjustment: pendingAdjustment
 				? this.formatAdjustment(pendingAdjustment, Number(sale.total_amount))
 				: null,

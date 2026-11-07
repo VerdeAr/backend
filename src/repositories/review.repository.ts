@@ -26,6 +26,34 @@ export const reviewRepository = AppDataSource.getRepository(Review).extend({
 		};
 	},
 
+	async getProductsRatingStats(
+		productIds: string[],
+	): Promise<Map<string, ProductRatingStats>> {
+		if (productIds.length === 0) return new Map();
+
+		const results = await this.createQueryBuilder("review")
+			.innerJoin("review.sale", "sale")
+			.innerJoin("sale.items", "item", "item.product_id IN (:...productIds)", {
+				productIds,
+			})
+			.select("item.product_id", "product_id")
+			.addSelect("AVG(review.rating)", "average")
+			.addSelect("COUNT(DISTINCT review.id)", "count")
+			.groupBy("item.product_id")
+			.getRawMany();
+
+		const map = new Map<string, ProductRatingStats>();
+		for (const row of results) {
+			map.set(row.product_id, {
+				average_rating: row.average
+					? Number(Number(row.average).toFixed(1))
+					: 0,
+				review_count: Number(row.count || 0),
+			});
+		}
+		return map;
+	},
+
 	// Usada para impedir duplicidade de avaliação por venda (RN-36)
 	findBySaleId(saleId: string): Promise<Review | null> {
 		return this.findOne({ where: { sale_id: saleId } });

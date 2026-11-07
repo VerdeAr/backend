@@ -16,6 +16,7 @@ export const saleRepository = AppDataSource.getRepository(Sale).extend({
 			.addSelect(["seller_user.id", "seller_user.name", "seller_user.phone"])
 			.leftJoinAndSelect("sale.payments", "payments")
 			.leftJoinAndSelect("payments.payment_method", "payment_method")
+			.leftJoinAndSelect("sale.reviews", "reviews")
 			.where("sale.id = :saleId", { saleId })
 			.getOne();
 	},
@@ -82,6 +83,7 @@ export const saleRepository = AppDataSource.getRepository(Sale).extend({
 			.addSelect(["seller_user.id", "seller_user.name", "seller_user.phone"])
 			.leftJoinAndSelect("sale.payments", "payments")
 			.leftJoinAndSelect("payments.payment_method", "payment_method")
+			.leftJoinAndSelect("sale.reviews", "reviews")
 			.where("sale.customer_id = :customerId", { customerId })
 			.orderBy("sale.created_at", "DESC")
 			.getMany();
