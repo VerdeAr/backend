@@ -67,17 +67,9 @@ export const structuredAddressInputSchema = z.object({
 	cep: optionalZipCodeSchema,
 	street: z.preprocess(
 		emptyStringToUndefined,
-		z.string().max(150, "Logradouro muito longo").optional().nullable(),
-	),
-	logradouro: z.preprocess(
-		emptyStringToUndefined,
-		z.string().max(150, "Logradouro muito longo").optional().nullable(),
+		z.string().max(255, "Logradouro muito longo").optional().nullable(),
 	),
 	number: z.preprocess(
-		emptyStringToUndefined,
-		z.string().max(20, "Número muito longo").optional().nullable(),
-	),
-	numero: z.preprocess(
 		emptyStringToUndefined,
 		z.string().max(20, "Número muito longo").optional().nullable(),
 	),
@@ -85,15 +77,11 @@ export const structuredAddressInputSchema = z.object({
 		emptyStringToUndefined,
 		z.string().max(100, "Complemento muito longo").optional().nullable(),
 	),
-	complemento: z.preprocess(
-		emptyStringToUndefined,
-		z.string().max(100, "Complemento muito longo").optional().nullable(),
-	),
 	neighborhood_name: z.preprocess(
 		emptyStringToUndefined,
 		z.string().max(100, "Nome do bairro muito longo").optional().nullable(),
 	),
-	bairro: z.preprocess(
+	neighborhood: z.preprocess(
 		emptyStringToUndefined,
 		z.string().max(100, "Nome do bairro muito longo").optional().nullable(),
 	),
@@ -101,12 +89,7 @@ export const structuredAddressInputSchema = z.object({
 		emptyStringToUndefined,
 		z.string().max(100, "Nome da cidade muito longo").optional().nullable(),
 	),
-	cidade: z.preprocess(
-		emptyStringToUndefined,
-		z.string().max(100, "Nome da cidade muito longo").optional().nullable(),
-	),
 	state: optionalStateSchema,
-	uf: optionalStateSchema,
 });
 
 export interface ExtractedStructuredAddress {
@@ -146,7 +129,11 @@ export function extractStructuredAddress(
 	}
 
 	const neighborhoodName =
-		data.neighborhood_name !== undefined ? data.neighborhood_name : data.bairro;
+		data.neighborhood_name !== undefined
+			? data.neighborhood_name
+			: data.neighborhood !== undefined
+				? data.neighborhood
+				: data.bairro;
 	if (neighborhoodName !== undefined) {
 		result.neighborhood_name = (neighborhoodName as string | null) || null;
 	}
@@ -162,4 +149,57 @@ export function extractStructuredAddress(
 	}
 
 	return result;
+}
+
+export function formatFullAddress(
+	data?: {
+		street?: string | null;
+		number?: string | null;
+		complement?: string | null;
+		neighborhood_name?: string | null;
+		city?: string | null;
+		state?: string | null;
+		zip_code?: string | null;
+		address?: string | null;
+	} | null,
+): string | null {
+	if (!data) return null;
+
+	const parts: string[] = [];
+
+	if (data.street) {
+		let streetPart = data.street;
+		if (data.number) {
+			streetPart += `, ${data.number}`;
+		}
+		if (data.complement) {
+			streetPart += `, ${data.complement}`;
+		}
+		parts.push(streetPart);
+	}
+
+	if (data.neighborhood_name) {
+		parts.push(data.neighborhood_name);
+	}
+
+	if (data.city && data.state) {
+		parts.push(`${data.city} - ${data.state}`);
+	} else if (data.city) {
+		parts.push(data.city);
+	} else if (data.state) {
+		parts.push(data.state);
+	}
+
+	if (data.zip_code) {
+		const digits = data.zip_code.replace(/\D/g, "");
+		const formattedCep =
+			digits.length === 8 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+		parts.push(`CEP: ${formattedCep}`);
+	}
+
+	if (parts.length > 0) {
+		return parts.join(" - ");
+	}
+
+	return data.address || null;
 }

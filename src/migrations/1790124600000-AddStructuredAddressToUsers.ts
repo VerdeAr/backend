@@ -9,7 +9,7 @@ export class AddStructuredAddressToUsers1790124600000
 		await queryRunner.query(
 			`ALTER TABLE "users" ` +
 				`ADD COLUMN "zip_code" character varying(8), ` +
-				`ADD COLUMN "street" character varying(150), ` +
+				`ADD COLUMN "street" character varying(255), ` +
 				`ADD COLUMN "number" character varying(20), ` +
 				`ADD COLUMN "complement" character varying(100), ` +
 				`ADD COLUMN "neighborhood_name" character varying(100), ` +

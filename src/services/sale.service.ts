@@ -14,6 +14,7 @@ import {
 	SaleProduct,
 	SaleStatus,
 	SaleStatusHistory,
+	User,
 } from "@/entities";
 import { AppError, type ValidationErrorDetail } from "@/errors/AppError";
 import {
@@ -22,6 +23,7 @@ import {
 	saleStatusHistoryRepository,
 	sellerRepository,
 } from "@/repositories";
+import { formatFullAddress } from "@/schemas/address.schema";
 import type {
 	CheckoutInput,
 	ProposeAdjustmentInput,
@@ -181,6 +183,26 @@ export class SaleService {
 					"Modalidade de entrega não definida. Escolha ENTREGA ou RETIRADA.",
 					400,
 				);
+			}
+
+			// Validação RF-40: Entrega no endereço exige endereço estruturado completo no cadastro
+			if (deliveryType === DeliveryType.ENTREGA) {
+				const customer = await manager.findOne(User, {
+					where: { id: userId },
+				});
+				const hasCompleteAddress =
+					Boolean(customer?.zip_code) &&
+					Boolean(customer?.street) &&
+					Boolean(customer?.number) &&
+					Boolean(customer?.city) &&
+					Boolean(customer?.state);
+
+				if (!hasCompleteAddress) {
+					throw new AppError(
+						"Para entrega no endereço, é obrigatório preencher o endereço completo (CEP, logradouro, número, cidade e UF) no perfil.",
+						400,
+					);
+				}
 			}
 
 			// 3. Determina a forma de pagamento
@@ -933,8 +955,11 @@ export class SaleService {
 			name: sale.customer.name,
 			email: sale.customer.email,
 			phone: sale.customer.phone || null,
-			address: sale.customer.address || null,
-			neighborhood: sale.customer.neighborhood?.name || null,
+			address: formatFullAddress(sale.customer),
+			neighborhood:
+				sale.customer.neighborhood_name ||
+				sale.customer.neighborhood?.name ||
+				null,
 		};
 	}
 

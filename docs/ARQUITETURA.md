@@ -149,7 +149,8 @@ Pontos importantes do modelo:
 - **Integridade referencial:** `sales.customer_id` e `sale_products.product_id` usam `ON DELETE RESTRICT`, preservando o histórico de pedidos. As demais relações usam `CASCADE` ou `SET NULL`.
 - **Avaliação única por venda:** garantida na camada de service; não há constraint `UNIQUE` em `reviews.sale_id`.
 - **Frete fixo:** fica em `users.fixed_shipping_rate` (inicia em R$ 0,00 para vendedores).
-- **Migrations:** `InitialSchema1790124561841` e `SaleAdjustmentsAndStatusHistory1793827055534` (VER-95: novos status, ajustes, histórico e backfill do histórico dos pedidos existentes), registradas manualmente em `config/database.ts`. Novas migrations precisam ser adicionadas à lista `migrations` do DataSource.
+- **Endereço estruturado (VER-63):** `users` armazena o endereço estruturado em colunas específicas (`zip_code`, `street`, `number`, `complement`, `neighborhood_name`, `city`, `state`) mantendo o campo `address` como fallback. Na resposta da API (`UserResponse`), o texto do bairro vem sempre em `neighborhood_name`, preservando o campo `neighborhood` para o objeto do relacionamento TypeORM.
+- **Migrations:** `InitialSchema1790124561841`, `AddStructuredAddressToUsers1790124600000` (VER-63) e `SaleAdjustmentsAndStatusHistory1793827055534` (VER-95: novos status, ajustes, histórico e backfill do histórico dos pedidos existentes), registradas manualmente em `src/config/database.ts`. Novas migrations precisam ser adicionadas à lista `migrations` do DataSource.
 
 ---
 

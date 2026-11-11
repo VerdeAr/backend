@@ -38,7 +38,7 @@ export class User {
 	@Column({ type: "varchar", length: 8, nullable: true })
 	zip_code!: string | null;
 
-	@Column({ type: "varchar", length: 150, nullable: true })
+	@Column({ type: "varchar", length: 255, nullable: true })
 	street!: string | null;
 
 	@Column({ type: "varchar", length: 20, nullable: true })
