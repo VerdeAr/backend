@@ -131,6 +131,11 @@ export const swaggerDoc = {
 			description:
 				"Conversas entre cliente e vendedor: histórico, mensagens, leitura e encerramento (o envio em tempo real usa Socket.io)",
 		},
+		{
+			name: "Frete",
+			description:
+				"Frete por quilômetro com a distância de condução do OpenRouteService (VER-91)",
+		},
 	],
 	components: {
 		securitySchemes: {
@@ -187,6 +192,20 @@ export const swaggerDoc = {
 				content: {
 					"application/json": {
 						schema: { $ref: "#/components/schemas/ErrorResponse" },
+					},
+				},
+			},
+			ServiceUnavailable: {
+				description:
+					"Serviço de rotas (OpenRouteService) indisponível, lento, sem cota ou mal configurado. A mensagem é amigável e não expõe detalhes internos.",
+				content: {
+					"application/json": {
+						schema: { $ref: "#/components/schemas/ErrorResponse" },
+						example: {
+							success: false,
+							message:
+								"O cálculo de frete está indisponível no momento. Tente novamente em instantes ou escolha a Retirada.",
+						},
 					},
 				},
 			},
@@ -265,10 +284,155 @@ export const swaggerDoc = {
 						nullable: true,
 						example: "Sítio Primavera",
 					},
+					latitude: {
+						type: "string",
+						nullable: true,
+						description:
+							"Origem do frete por km (decimal como texto). Nula = usa a taxa fixa",
+						example: "-23.1812345",
+					},
+					longitude: {
+						type: "string",
+						nullable: true,
+						example: "-50.6467890",
+					},
+					shipping_base_fee: {
+						type: "string",
+						description: "Taxa base do frete por km (decimal como texto)",
+						example: "5.00",
+					},
+					shipping_price_per_km: {
+						type: "string",
+						description: "Preço por km rodado (decimal como texto)",
+						example: "2.00",
+					},
+					max_delivery_radius_km: {
+						type: "string",
+						nullable: true,
+						description: "Raio máximo de entrega. Nulo = sem limite",
+						example: "20.00",
+					},
 					created_at: { type: "string", format: "date-time" },
 					updated_at: { type: "string", format: "date-time" },
 				},
 				required: ["id", "user_id"],
+			},
+			Coordinates: {
+				type: "object",
+				properties: {
+					latitude: {
+						type: "number",
+						minimum: -90,
+						maximum: 90,
+						example: -23.1812,
+					},
+					longitude: {
+						type: "number",
+						minimum: -180,
+						maximum: 180,
+						example: -50.6468,
+					},
+				},
+				required: ["latitude", "longitude"],
+			},
+			RouteLineString: {
+				type: "object",
+				description: "Geometria GeoJSON da rota; pares [longitude, latitude]",
+				properties: {
+					type: { type: "string", enum: ["LineString"] },
+					coordinates: {
+						type: "array",
+						items: {
+							type: "array",
+							items: { type: "number" },
+							minItems: 2,
+							maxItems: 2,
+						},
+						example: [
+							[-50.6, -23.1],
+							[-50.65, -23.18],
+						],
+					},
+				},
+				required: ["type", "coordinates"],
+			},
+			SellerShippingQuote: {
+				type: "object",
+				description: "Frete de um produtor até o endereço do cliente",
+				properties: {
+					seller_id: { type: "string", format: "uuid" },
+					farm_name: { type: "string", nullable: true },
+					pricing_mode: {
+						type: "string",
+						enum: ["POR_KM", "TAXA_FIXA"],
+						description:
+							"POR_KM: taxa base + km × preço/km. TAXA_FIXA: produtor sem origem configurada",
+					},
+					shipping_cost: { type: "number", example: 15 },
+					distance_km: { type: "number", nullable: true, example: 5 },
+					duration_min: { type: "number", nullable: true, example: 10 },
+					within_radius: { type: "boolean", example: true },
+					max_delivery_radius_km: {
+						type: "number",
+						nullable: true,
+						example: 20,
+					},
+					origin: {
+						nullable: true,
+						allOf: [{ $ref: "#/components/schemas/Coordinates" }],
+					},
+					route: {
+						nullable: true,
+						allOf: [{ $ref: "#/components/schemas/RouteLineString" }],
+					},
+				},
+				required: [
+					"seller_id",
+					"pricing_mode",
+					"shipping_cost",
+					"within_radius",
+				],
+			},
+			CalculateRouteResponse: {
+				type: "object",
+				properties: {
+					seller_id: { type: "string", format: "uuid" },
+					pricing_mode: { type: "string", enum: ["POR_KM", "TAXA_FIXA"] },
+					distance_km: { type: "number", nullable: true, example: 5 },
+					duration_min: { type: "number", nullable: true, example: 10 },
+					shipping_cost: { type: "number", example: 15 },
+					within_radius: { type: "boolean", example: true },
+					max_delivery_radius_km: {
+						type: "number",
+						nullable: true,
+						example: 20,
+					},
+					origin: {
+						nullable: true,
+						allOf: [{ $ref: "#/components/schemas/Coordinates" }],
+					},
+					destination: {
+						nullable: true,
+						allOf: [{ $ref: "#/components/schemas/Coordinates" }],
+					},
+					route: {
+						type: "object",
+						nullable: true,
+						description:
+							"Feature GeoJSON com a rota, pronta para o Leaflet (nula na TAXA_FIXA)",
+						properties: {
+							type: { type: "string", enum: ["Feature"] },
+							properties: { type: "object" },
+							geometry: { $ref: "#/components/schemas/RouteLineString" },
+						},
+					},
+				},
+				required: [
+					"seller_id",
+					"pricing_mode",
+					"shipping_cost",
+					"within_radius",
+				],
 			},
 			UserResponse: {
 				type: "object",
@@ -622,7 +786,8 @@ export const swaggerDoc = {
 			Cart: {
 				type: "object",
 				description:
-					"Carrinho persistente do usuário, com os totais já calculados. O frete soma a taxa fixa de cada produtor presente e só existe na modalidade ENTREGA.",
+					"Carrinho persistente do usuário, com os totais já calculados. O frete soma o frete de cada produtor presente (por km ou taxa fixa de reserva) e só existe na modalidade ENTREGA. " +
+					"Se o frete não puder ser calculado, o carrinho abre normalmente com `shipping` 0, `shipping_status` diferente de OK e a mensagem em `shipping_message`.",
 				properties: {
 					id: { type: "string", format: "uuid" },
 					user_id: { type: "string", format: "uuid" },
@@ -645,6 +810,23 @@ export const swaggerDoc = {
 					},
 					subtotal: { type: "number", example: 27 },
 					shipping: { type: "number", example: 12.5 },
+					shipping_status: {
+						type: "string",
+						nullable: true,
+						enum: ["OK", "FORA_DO_RAIO", "SEM_ENDERECO", "INDISPONIVEL", null],
+						description:
+							"Situação do frete; nula fora da ENTREGA ou com o carrinho vazio",
+						example: "OK",
+					},
+					shipping_message: {
+						type: "string",
+						nullable: true,
+						description: "Mensagem para o cliente quando o frete não é OK",
+					},
+					shipping_details: {
+						type: "array",
+						items: { $ref: "#/components/schemas/SellerShippingQuote" },
+					},
 					total: { type: "number", example: 39.5 },
 					total_items: {
 						type: "number",
@@ -759,6 +941,18 @@ export const swaggerDoc = {
 						description: "Subtotal + frete, serializado como texto",
 						example: "39.50",
 					},
+					shipping_amount: {
+						type: "string",
+						description: "Frete gravado no pedido, serializado como texto",
+						example: "12.50",
+					},
+					shipping_distance_km: {
+						type: "string",
+						nullable: true,
+						description:
+							"Soma das distâncias de condução dos produtores com frete por km",
+						example: "5.00",
+					},
 					items: {
 						type: "array",
 						items: { $ref: "#/components/schemas/CheckoutSaleItem" },
@@ -830,6 +1024,12 @@ export const swaggerDoc = {
 						enum: SALE_STATUSES,
 					},
 					total_amount: { type: "number", example: 39.5 },
+					shipping_amount: {
+						type: "number",
+						description: "Frete gravado no checkout (pedidos antigos: 0)",
+						example: 12.5,
+					},
+					shipping_distance_km: { type: "number", nullable: true, example: 5 },
 					created_at: { type: "string", format: "date-time" },
 					updated_at: { type: "string", format: "date-time" },
 					pending_adjustment: {
@@ -1830,9 +2030,11 @@ export const swaggerDoc = {
 		"/pessoa/frete": {
 			put: {
 				tags: ["Pessoa e Perfil"],
-				summary: "Configurar a taxa de frete fixo do vendedor",
+				summary: "Configurar o frete do vendedor (por km ou taxa fixa)",
 				description:
-					"O frete fixo é somado ao total quando o cliente escolhe a modalidade ENTREGA.",
+					"Com origem (latitude e longitude) configurada, o frete é `taxa base + distância de condução em km × preço por km`, limitado ao raio de entrega. " +
+					"Sem origem, vale a taxa fixa (`fixed_shipping_rate`). Todos os campos são opcionais: só o que vier na requisição é alterado. " +
+					"Para remover a origem e voltar à taxa fixa, envie latitude e longitude como null.",
 				security: authenticated,
 				requestBody: {
 					required: true,
@@ -1840,21 +2042,71 @@ export const swaggerDoc = {
 						"application/json": {
 							schema: {
 								type: "object",
+								minProperties: 1,
 								properties: {
 									fixed_shipping_rate: {
 										type: "number",
 										minimum: 0,
+										description: "Taxa fixa de reserva",
 										example: 12.5,
 									},
+									shipping_base_fee: {
+										type: "number",
+										minimum: 0,
+										example: 5,
+									},
+									shipping_price_per_km: {
+										type: "number",
+										minimum: 0,
+										example: 2,
+									},
+									max_delivery_radius_km: {
+										type: "number",
+										nullable: true,
+										exclusiveMinimum: true,
+										minimum: 0,
+										description: "Maior que zero. Nulo = sem limite",
+										example: 20,
+									},
+									latitude: {
+										type: "number",
+										nullable: true,
+										minimum: -90,
+										maximum: 90,
+										description: "Enviar junto com longitude",
+										example: -23.1812,
+									},
+									longitude: {
+										type: "number",
+										nullable: true,
+										minimum: -180,
+										maximum: 180,
+										example: -50.6468,
+									},
 								},
-								required: ["fixed_shipping_rate"],
+							},
+							examples: {
+								porKm: {
+									summary: "Frete por km com raio de 20 km",
+									value: {
+										shipping_base_fee: 5,
+										shipping_price_per_km: 2,
+										max_delivery_radius_km: 20,
+										latitude: -23.1812,
+										longitude: -50.6468,
+									},
+								},
+								taxaFixa: {
+									summary: "Somente a taxa fixa",
+									value: { fixed_shipping_rate: 12.5 },
+								},
 							},
 						},
 					},
 				},
 				responses: {
 					200: {
-						description: "Taxa de frete atualizada com sucesso",
+						description: "Frete atualizado com sucesso",
 						content: {
 							"application/json": {
 								schema: {
@@ -1865,9 +2117,34 @@ export const swaggerDoc = {
 											type: "string",
 											example: "Frete atualizado com sucesso!",
 										},
-										fixed_shipping_rate: { type: "number", example: 12.5 },
+										fixed_shipping_rate: {
+											type: "number",
+											nullable: true,
+											example: 12.5,
+										},
+										shipping_base_fee: { type: "number", example: 5 },
+										shipping_price_per_km: { type: "number", example: 2 },
+										max_delivery_radius_km: {
+											type: "number",
+											nullable: true,
+											example: 20,
+										},
+										latitude: {
+											type: "number",
+											nullable: true,
+											example: -23.1812,
+										},
+										longitude: {
+											type: "number",
+											nullable: true,
+											example: -50.6468,
+										},
+										pricing_mode: {
+											type: "string",
+											enum: ["POR_KM", "TAXA_FIXA"],
+										},
 									},
-									required: ["success", "message", "fixed_shipping_rate"],
+									required: ["success", "message", "pricing_mode"],
 								},
 							},
 						},
@@ -2571,7 +2848,8 @@ export const swaggerDoc = {
 				summary: "Finalizar a compra a partir do carrinho",
 				description:
 					"Executa tudo em uma transação: valida o estoque com bloqueio, baixa o estoque, cria a venda como ABERTA com o preço de cada item, registra o pagamento e esvazia o carrinho. " +
-					"Se `delivery_type` ou `payment_method` não forem enviados, usa os valores salvos no carrinho (pagamento padrão: Dinheiro).",
+					"Se `delivery_type` ou `payment_method` não forem enviados, usa os valores salvos no carrinho (pagamento padrão: Dinheiro). " +
+					"Na ENTREGA, o frete é recalculado no servidor (por km via OpenRouteService ou taxa fixa de reserva) antes da transação e gravado em `shipping_amount` e `shipping_distance_km`.",
 				security: authenticated,
 				requestBody: {
 					required: false,
@@ -2607,7 +2885,7 @@ export const swaggerDoc = {
 					},
 					400: {
 						description:
-							"Carrinho vazio, modalidade de entrega indefinida, produto desativado ou estoque insuficiente",
+							"Carrinho vazio, modalidade de entrega indefinida, produto desativado, estoque insuficiente, endereço incompleto para ENTREGA ou endereço fora do raio de entrega de algum produtor",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },
@@ -2623,6 +2901,25 @@ export const swaggerDoc = {
 							},
 						},
 					},
+					409: {
+						description:
+							"O carrinho mudou entre o cálculo do frete e a finalização; revisar e tentar de novo",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					422: {
+						description:
+							"Endereço do cliente não localizado ou sem rota de carro até o produtor",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					503: { $ref: "#/components/responses/ServiceUnavailable" },
 				},
 			},
 		},
@@ -3474,6 +3771,125 @@ export const swaggerDoc = {
 							},
 						},
 					},
+				},
+			},
+		},
+		"/frete/calcular-rota": {
+			post: {
+				tags: ["Frete"],
+				summary: "Simular o frete de um produtor até um destino, com a rota",
+				description:
+					"Público (simulação na página do produto), limitado a 30 requisições por minuto por IP. " +
+					"Calcula a distância de condução (perfil carro) no OpenRouteService e aplica `taxa base + km × preço por km`, arredondado a 2 casas. " +
+					"O destino é informado por coordenadas (latitude e longitude) ou por CEP, nunca os dois. " +
+					"Produtor sem origem configurada responde 200 com `pricing_mode` TAXA_FIXA, sem distância e sem rota.",
+				requestBody: {
+					required: true,
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									seller_id: {
+										type: "string",
+										format: "uuid",
+										description: "ID do produtor (`seller.id` do produto)",
+									},
+									latitude: { type: "number", minimum: -90, maximum: 90 },
+									longitude: { type: "number", minimum: -180, maximum: 180 },
+									cep: {
+										type: "string",
+										pattern: "^\\d{5}-?\\d{3}$",
+										example: "86300-000",
+									},
+								},
+								required: ["seller_id"],
+							},
+							examples: {
+								coordenadas: {
+									summary: "Destino por coordenadas",
+									value: {
+										seller_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+										latitude: -23.1812,
+										longitude: -50.6468,
+									},
+								},
+								cep: {
+									summary: "Destino por CEP",
+									value: {
+										seller_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+										cep: "86300-000",
+									},
+								},
+							},
+						},
+					},
+				},
+				responses: {
+					200: {
+						description: "Frete calculado",
+						content: {
+							"application/json": {
+								schema: {
+									$ref: "#/components/schemas/CalculateRouteResponse",
+								},
+								example: {
+									seller_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+									pricing_mode: "POR_KM",
+									distance_km: 5,
+									duration_min: 10,
+									shipping_cost: 15,
+									within_radius: true,
+									max_delivery_radius_km: 20,
+									origin: { latitude: -23.1, longitude: -50.6 },
+									destination: { latitude: -23.18, longitude: -50.65 },
+									route: {
+										type: "Feature",
+										properties: {},
+										geometry: {
+											type: "LineString",
+											coordinates: [
+												[-50.6, -23.1],
+												[-50.65, -23.18],
+											],
+										},
+									},
+								},
+							},
+						},
+					},
+					400: { $ref: "#/components/responses/ValidationError" },
+					404: {
+						description: "Produtor não encontrado",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					422: {
+						description:
+							"Destino fora do raio de entrega, CEP não localizado ou sem rota de carro. A mensagem sugere a Retirada.",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+								example: {
+									success: false,
+									message:
+										'"Sítio Primavera" entrega até 20 km e o seu endereço fica a 30 km. Escolha a Retirada para este pedido.',
+								},
+							},
+						},
+					},
+					429: {
+						description: "Limite de simulações por minuto excedido",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					503: { $ref: "#/components/responses/ServiceUnavailable" },
 				},
 			},
 		},
