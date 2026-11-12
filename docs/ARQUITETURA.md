@@ -148,9 +148,11 @@ Pontos importantes do modelo:
 - **Ajustes:** `sale_adjustments` guarda a proposta (motivo, vendedor, status, `previous_status` e `responded_at`) e `sale_adjustment_items` guarda a quantidade e o preço originais e propostos de cada item. O índice único parcial `UQ_sale_adjustments_pending_sale` garante **no máximo uma proposta `PENDENTE` por pedido**.
 - **Integridade referencial:** `sales.customer_id` e `sale_products.product_id` usam `ON DELETE RESTRICT`, preservando o histórico de pedidos. As demais relações usam `CASCADE` ou `SET NULL`.
 - **Avaliação única por venda:** garantida na camada de service; não há constraint `UNIQUE` em `reviews.sale_id`.
-- **Frete fixo:** fica em `users.fixed_shipping_rate` (inicia em R$ 0,00 para vendedores).
+- **Frete fixo:** fica em `users.fixed_shipping_rate` (inicia em R$ 0,00 para vendedores). Desde a VER-91, é a **taxa de reserva** de quem ainda não configurou o frete por km.
+- **Frete por km (VER-91):** `sellers` guarda a origem (`latitude` e `longitude`, `numeric(10,7)`, nulas = sem origem), `shipping_base_fee` e `shipping_price_per_km` (`numeric(10,2)`, padrão 0, não negativos) e `max_delivery_radius_km` (nulo = sem limite). Constraints `CHECK` garantem as faixas válidas.
+- **Frete no pedido (VER-91):** `sales.shipping_amount` (`numeric(10,2)`, padrão 0) e `sales.shipping_distance_km` (nulo quando nenhum produtor cobra por km) são gravados no checkout e não mudam depois. Pedidos anteriores à migration ficam com frete 0, porque o valor real não era registrado.
 - **Endereço estruturado (VER-63):** `users` armazena o endereço estruturado em colunas específicas (`zip_code`, `street`, `number`, `complement`, `neighborhood_name`, `city`, `state`) mantendo o campo `address` como fallback. Na resposta da API (`UserResponse`), o texto do bairro vem sempre em `neighborhood_name`, preservando o campo `neighborhood` para o objeto do relacionamento TypeORM.
-- **Migrations:** `InitialSchema1790124561841`, `AddStructuredAddressToUsers1790124600000` (VER-63) e `SaleAdjustmentsAndStatusHistory1793827055534` (VER-95: novos status, ajustes, histórico e backfill do histórico dos pedidos existentes), registradas manualmente em `src/config/database.ts`. Novas migrations precisam ser adicionadas à lista `migrations` do DataSource.
+- **Migrations:** `InitialSchema1790124561841`, `AddStructuredAddressToUsers1790124600000` (VER-63) e `SaleAdjustmentsAndStatusHistory1793827055534` (VER-95: novos status, ajustes, histórico e backfill do histórico dos pedidos existentes) e `AddDynamicShippingFields1794441600000` (VER-91: frete por km no vendedor e frete gravado no pedido), registradas manualmente em `src/config/database.ts`. Novas migrations precisam ser adicionadas à lista `migrations` do DataSource.
 
 ---
 
@@ -168,6 +170,7 @@ Pontos importantes do modelo:
 | Recurso | Público | Cliente | Vendedor |
 |---|:-:|:-:|:-:|
 | Vitrine (`/produtos`), `/categorias`, `/bairros`, `/unidades-medida` | ✔ | ✔ | ✔ |
+| `POST /frete/calcular-rota` (simulação de frete, 30 req/min por IP) | ✔ | ✔ | ✔ |
 | Listar avaliações por vendedor ou produto | ✔ | ✔ | ✔ |
 | Registro, login e logout | ✔ | ✔ | ✔ |
 | `/auth/me`, `/pessoa/cadastro`, `/pessoa/senha` | | ✔ | ✔ |
@@ -197,7 +200,13 @@ Pontos importantes do modelo:
 ### Carrinho e frete
 - Um carrinho por usuário, criado sob demanda. O preço do item é atualizado ao adicionar ou alterar quantidade.
 - Não aceita produto inativo, esgotado ou quantidade acima do estoque.
-- O **frete é calculado por produtor**: na modalidade `ENTREGA`, soma-se o `fixed_shipping_rate` de cada vendedor distinto presente no carrinho. Em `RETIRADA`, o frete é R$ 0,00. O bairro do usuário não entra no cálculo.
+- O **frete é calculado por produtor** (VER-91) e soma o frete de cada vendedor distinto do carrinho, só na modalidade `ENTREGA`. Em `RETIRADA`, o frete é R$ 0,00.
+  - **Produtor com origem configurada:** `taxa base + distância de condução em km × preço por km`, arredondado a 2 casas. A distância vem do OpenRouteService (perfil `driving-car`) entre a origem do produtor e o endereço do cliente, convertido em coordenadas pela geocodificação do próprio ORS. O endereço usado é o estruturado (VER-63) ou, em cadastros antigos, o texto livre `address`.
+  - **Produtor sem origem:** vale a taxa fixa `fixed_shipping_rate` (reserva), sem chamar o ORS.
+  - **Raio:** destino além de `max_delivery_radius_km` não permite Entrega; o sistema sugere a Retirada.
+- **Uma única função de cálculo** (`ShippingService`, em `src/services/shipping.service.ts`) atende o carrinho, o checkout e o `POST /frete/calcular-rota`, então os valores não divergem.
+- O carrinho **nunca trava por causa do frete**: se o endereço faltar, o destino estiver fora do raio ou o ORS falhar, ele abre com `shipping_status` (`SEM_ENDERECO`, `FORA_DO_RAIO` ou `INDISPONIVEL`) e `shipping_message`. O checkout recusa a Entrega nesses casos.
+- **Integração com o OpenRouteService** (`src/services/routing.service.ts`): chave só em `ORS_API_KEY`, enviada no cabeçalho `Authorization` (nunca na URL nem em log); tempo limite de 8 s; falhas (chave inválida, cota, serviço fora, tempo esgotado) viram `AppError` 503 com mensagem amigável, e rota impossível vira 422; cache em memória de 15 min para rotas e 1 h para geocodificação, para respeitar a cota gratuita (RNF-23). Os logs registram só o tipo da falha, sem endereço ou coordenadas.
 - A forma de pagamento preferida é salva no carrinho como texto.
 
 ### Checkout
@@ -206,8 +215,8 @@ Executado em uma única transação (`SaleService.checkout`):
 1. Carrega o carrinho e rejeita carrinho vazio.
 2. Define entrega (corpo ou carrinho) e pagamento (corpo, carrinho ou `Dinheiro` como padrão).
 3. Para cada item, aplica `pessimistic_write` no produto, valida existência, status ativo e estoque, e decrementa o estoque.
-4. Calcula subtotal, frete por produtor e total.
-5. Cria `Sale` (`ABERTA`), a primeira entrada do histórico de status, `SaleProduct` com o preço unitário congelado e `Payment`.
+4. Calcula subtotal, frete por produtor e total. O frete é calculado no servidor **antes** de abrir a transação, para a chamada ao OpenRouteService não segurar os bloqueios de estoque; dentro da transação, se o carrinho tiver mudado de produtores, a operação é recusada com 409. Entrega fora do raio de algum produtor é recusada com 400 antes de qualquer alteração.
+5. Cria `Sale` (`ABERTA`, com `shipping_amount` e `shipping_distance_km`), a primeira entrada do histórico de status, `SaleProduct` com o preço unitário congelado e `Payment`.
 6. Esvazia o carrinho. Qualquer falha desfaz tudo.
 
 ### Pedidos
