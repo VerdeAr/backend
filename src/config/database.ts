@@ -24,6 +24,7 @@ import { User } from "@/entities/User.js";
 import { InitialSchema1790124561841 } from "@/migrations/1790124561841-InitialSchema.js";
 import { AddStructuredAddressToUsers1790124600000 } from "@/migrations/1790124600000-AddStructuredAddressToUsers.js";
 import { SaleAdjustmentsAndStatusHistory1793827055534 } from "@/migrations/1793827055534-SaleAdjustmentsAndStatusHistory.js";
+import { AddDynamicShippingFields1794441600000 } from "@/migrations/1794441600000-AddDynamicShippingFields.js";
 
 const { DB_HOST, DB_PORT, DB_USER, DB_PASS, DB_NAME } = process.env;
 
@@ -61,6 +62,7 @@ export const AppDataSource = new DataSource({
 		InitialSchema1790124561841,
 		AddStructuredAddressToUsers1790124600000,
 		SaleAdjustmentsAndStatusHistory1793827055534,
+		AddDynamicShippingFields1794441600000,
 	],
 	subscribers: [],
 });
