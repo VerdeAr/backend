@@ -41,8 +41,27 @@ function generateNumericCnpj(): string {
 }
 
 // Cada chamada gera dados únicos, então os testes não dependem do estado anterior do banco
+// Endereço usado no cadastro dos usuários de teste:
+// - "estruturado": endereço completo (CEP, logradouro, número, cidade e UF), padrão
+// - "legado": só o texto livre antigo (`address`), como usuários anteriores à VER-63
+// - "nenhum": cadastro sem endereço
+export type TestAddressMode = "estruturado" | "legado" | "nenhum";
+
+const STRUCTURED_TEST_ADDRESS = {
+	zip_code: "86300-000",
+	street: "Rua dos Testes",
+	number: "100",
+	city: "Cornélio Procópio",
+	state: "PR",
+};
+
+const LEGACY_TEST_ADDRESS = {
+	address: "Rua dos Testes Legado, 200 - Centro",
+};
+
 export async function registerUser(
 	role: TestRole = "CLIENTE",
+	options: { address?: TestAddressMode } = {},
 ): Promise<RegisteredUser> {
 	const client = createClient();
 	const suffix = randomUUID().slice(0, 8);
@@ -64,9 +83,17 @@ export async function registerUser(
 				}
 			: {};
 
+	const addressMode = options.address ?? "estruturado";
+	const addressFields =
+		addressMode === "estruturado"
+			? STRUCTURED_TEST_ADDRESS
+			: addressMode === "legado"
+				? LEGACY_TEST_ADDRESS
+				: {};
+
 	const response = await client
 		.post("/auth/register")
-		.send({ ...credentials, ...sellerFields });
+		.send({ ...credentials, ...sellerFields, ...addressFields });
 
 	if (response.status !== 201) {
 		throw new Error(

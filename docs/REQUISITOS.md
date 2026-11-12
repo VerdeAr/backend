@@ -40,7 +40,7 @@ Requisitos do produto, com o estado de cada um. O VerdeAr é um marketplace que 
 | RF-06 | O usuário edita nome, telefone, endereço e bairro; o Vendedor também edita nome da fazenda e descrição. | B, F | Implementado | VER-38 |
 | RF-07 | O usuário troca a senha informando a senha atual e confirmando a nova. | B, F | Implementado | VER-38 |
 | RF-08 | O Vendedor define o valor do frete fixo (não negativo; inicia em R$ 0,00). | B, F | Implementado | VER-38 |
-| RF-09 | O endereço é estruturado (CEP, logradouro, número, complemento, bairro, cidade e UF), com autopreenchimento pelo ViaCEP no cadastro, no perfil e no checkout. | B, F | Planejado | VER-62 |
+| RF-09 | O endereço é estruturado (CEP, logradouro, número, complemento, bairro, cidade e UF), com autopreenchimento pelo ViaCEP no cadastro, no perfil e no checkout. | B, F | Parcial | VER-63 (backend), VER-64 (frontend) |
 
 ### 2.2 Vitrine e catálogo
 
@@ -76,7 +76,7 @@ Requisitos do produto, com o estado de cada um. O VerdeAr é um marketplace que 
 | RF-33 | O carrinho aceita produtos de vendedores diferentes. | B | Implementado | VER-40 |
 | RF-34 | O cliente escolhe **Entrega** ou **Retirada** e a forma de pagamento (Cartão, PIX, Dinheiro ou Boleto). | B, F | Implementado | VER-40 |
 | RF-35 | O frete soma a taxa fixa de cada vendedor presente no carrinho, só na modalidade Entrega; em Retirada é R$ 0,00. | B, F | Implementado | VER-40 |
-| RF-36 | O frete passa a ser calculado pela distância de condução (taxa base + km × preço por km), exibido no carrinho, no checkout e no simulador da página do produto, com mapa da rota. | B, F | Planejado | VER-90 |
+| RF-36 | O frete passa a ser calculado pela distância de condução (taxa base + km × preço por km), exibido no carrinho, no checkout e no simulador da página do produto, com mapa da rota. Cada vendedor define origem, taxa base, preço por km e raio máximo; fora do raio não há Entrega. Vendedor sem origem configurada usa a taxa fixa (RF-35). O frete e a distância ficam gravados no pedido. | B, F | Em andamento (backend em revisão: VER-91) | VER-90 |
 
 ### 2.5 Checkout e pedidos do cliente
 
@@ -186,7 +186,7 @@ O Notion descreve parte do comportamento do monolito legado. Onde o sistema atua
 | RN-31, RN-32, RN-33 e RN-41: cliente e vendedor podem excluir pedidos em aberto. | Não há exclusão de pedidos. O Vendedor **cancela** (`CANCELADA`), e o estoque volta. |
 | Visão geral: o cliente cancela pedidos em aberto. | Só o Vendedor altera o status. |
 | RN-49: todas as páginas, exceto Login e Cadastro, exigem login. | A vitrine e a página do produto são **públicas**. |
-| RN-43 a RN-45: frete fixo único por vendedor. | Vale por vendedor e é somado por vendedor no carrinho. Será substituído pelo cálculo por distância (RF-36). |
+| RN-43 a RN-45: frete fixo único por vendedor. | Vale por vendedor e é somado por vendedor no carrinho. Com a VER-91, o frete passa a ser por distância (RF-36) para quem configura a origem; o frete fixo fica como reserva. |
 | RN-47 e RN-48: chat entre Cliente e Vendedor. | Em desenvolvimento (RF-70 a RF-73). |
 
 ---

@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { structuredAddressInputSchema } from "./address.schema";
+import { updateShippingSettingsSchema } from "./shipping.schema";
 
-export const updateProfileSchema = z.object({
+const baseUpdateProfileSchema = z.object({
 	name: z
 		.string()
 		.min(2, "Nome deve ter pelo menos 2 caracteres")
@@ -14,6 +16,10 @@ export const updateProfileSchema = z.object({
 	description: z.string().max(500).optional().nullable(),
 	farm_name: z.string().max(150).optional().nullable(),
 });
+
+export const updateProfileSchema = baseUpdateProfileSchema.extend(
+	structuredAddressInputSchema.shape,
+);
 
 export const updatePasswordSchema = z
 	.object({
@@ -30,11 +36,8 @@ export const updatePasswordSchema = z
 		path: ["confirm_password"],
 	});
 
-export const updateShippingRateSchema = z.object({
-	fixed_shipping_rate: z
-		.number()
-		.min(0, "Valor de frete não pode ser negativo"),
-});
+// PUT /pessoa/frete: aceita a taxa fixa antiga e a configuração do frete por km (VER-91)
+export const updateShippingRateSchema = updateShippingSettingsSchema;
 
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type UpdatePasswordInput = z.infer<typeof updatePasswordSchema>;

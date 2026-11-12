@@ -67,10 +67,10 @@ Resultado: os ambientes de **homologação** e **produção** estão no ar, com 
 | Tarefa | Status | Backend | Frontend | QA |
 |---|---|---|---|---|
 | VER-58 — Mensagens e chat com WebSocket (Socket.io) | Fazendo | VER-59 Feito (no `main`) | VER-60 Feito | VER-61 **Fazendo** |
-| VER-62 — Endereços com CEP e autopreenchimento | Fazendo | VER-63 A fazer | VER-64 **Revisão** | VER-65 A fazer |
+| VER-62 — Endereços com CEP e autopreenchimento | Fazendo | VER-63 **Revisão** (migration de endereço estruturado e normalização de CEP) | VER-64 **Revisão** | VER-65 A fazer |
 | VER-74 — Blindagem de autenticação com cookies HTTP-Only | Fazendo | VER-75 Feito (no `main`) | VER-76 Feito | VER-77 **Fazendo** |
 | VER-78 — Avaliação pós-venda | Fazendo | VER-79 Feito (no `main`) | VER-80 Feito | VER-81 A fazer |
-| VER-90 — Frete dinâmico com OpenRouteService e Leaflet | A fazer (a tarefa; as subtarefas já começaram) | VER-91 **Fazendo** | VER-92 **Fazendo** | VER-93 A fazer |
+| VER-90 — Frete dinâmico com OpenRouteService e Leaflet | A fazer (a tarefa; as subtarefas já começaram) | VER-91 **Revisão** (branch `feat/VER-91-frete-por-km-openrouteservice`: frete por km com OpenRouteService, `POST /frete/calcular-rota`, frete gravado no pedido e testes com a API simulada) | VER-92 **Fazendo** | VER-93 A fazer |
 | VER-66 — PDP | A fazer (o Jira não atualizou a tarefa) | VER-67 Feito (no `main`) | VER-68 Feito | VER-69 A fazer |
 | VER-51 — Data loaders do React Router | Fazendo | VER-52 **Revisão** (suporte a aliases de query e sanitização de vazios) | VER-53 Feito | VER-54 A fazer |
 | VER-94 — Painel do vendedor e workflow de pedidos | A fazer (a tarefa; o backend já começou) | VER-95 **Fazendo** (branch `feat/VER-95-detalhe-pedido-ajuste-consentimento`: detalhe, máquina de estados, histórico, ajuste com consentimento e testes) | VER-96 A fazer | VER-97 A fazer |
@@ -95,6 +95,7 @@ Itens sem trabalho de backend: VER-48 (subcomponentização do frontend) e VER-5
 
 - **VER-108 (bug, A fazer):** os endpoints de chat expõem o hash da senha, o CPF, o e-mail e o telefone do outro participante da conversa. Precisa ser corrigido antes de o chat ser considerado concluído (VER-58).
 - A entidade `CartItem` declara `UNIQUE (cart_id, product_id)`, mas a constraint não existe no banco; o `migration:generate` sempre a propõe. Corrigir em uma migration própria ainda não tem tarefa.
+- **VER-91 e VER-92 (frete por km):** pontos a confirmar com o TL. (1) O PR do frontend da VER-92 chama o OpenRouteService direto do navegador, o que expõe a chave da API, e calcula o frete por conta própria; o esperado é consumir `POST /frete/calcular-rota` e o `shipping_details` do carrinho. (2) O endpoint e as respostas de produto expõem a origem exata do produtor (o RF-17 fala em "localização geral"). (3) O limite de 30 req/min usa `req.ip`; atrás de proxy reverso, o Express precisa de `trust proxy` para não somar todos os visitantes no mesmo IP.
 - O `POST /vendas/checkout` devolve a entidade crua da venda (pagamento como objeto e itens sem `product_name`), diferente do `GET /vendas/:id`. O frontend contorna isso buscando o pedido pelo ID. Ajustar para devolver a venda formatada ainda não tem tarefa.
 
 ---

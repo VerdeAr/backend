@@ -12,6 +12,7 @@ import { reviewRoutes } from "./review.routes";
 import { saleRoutes } from "./sale.routes";
 import { sellerOrderRoutes } from "./seller-order.routes";
 import { sellerProductRoutes } from "./seller-product.routes";
+import { shippingRoutes } from "./shipping.routes";
 
 const router = Router();
 
@@ -28,5 +29,6 @@ router.use("/carrinho", cartRoutes);
 router.use("/vendas", saleRoutes);
 router.use("/avaliacoes", reviewRoutes);
 router.use("/chats", chatRoutes);
+router.use("/frete", shippingRoutes);
 
 export { router };
