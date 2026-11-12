@@ -101,12 +101,45 @@ export class PersonService {
 			throw new AppError("Apenas vendedores podem configurar frete.", 403);
 		}
 
-		user.fixed_shipping_rate = data.fixed_shipping_rate;
-		await userRepository.save(user);
+		const sellerRepository = AppDataSource.getRepository(Seller);
+		const seller = await sellerRepository.findOne({
+			where: { user_id: userId },
+		});
+		if (!seller) {
+			throw new AppError("Perfil de vendedor não encontrado.", 404);
+		}
+
+		// Atualiza só o que veio na requisição, sem apagar o restante
+		if (data.fixed_shipping_rate !== undefined) {
+			user.fixed_shipping_rate = data.fixed_shipping_rate;
+			await userRepository.save(user);
+		}
+
+		if (data.shipping_base_fee !== undefined)
+			seller.shipping_base_fee = data.shipping_base_fee;
+		if (data.shipping_price_per_km !== undefined)
+			seller.shipping_price_per_km = data.shipping_price_per_km;
+		if (data.max_delivery_radius_km !== undefined)
+			seller.max_delivery_radius_km = data.max_delivery_radius_km;
+		if (data.latitude !== undefined) seller.latitude = data.latitude;
+		if (data.longitude !== undefined) seller.longitude = data.longitude;
+		await sellerRepository.save(seller);
+
+		const toNumberOrNull = (value: number | string | null) =>
+			value === null ? null : Number(value);
 
 		return {
 			message: "Frete atualizado com sucesso!",
-			fixed_shipping_rate: user.fixed_shipping_rate,
+			fixed_shipping_rate: toNumberOrNull(user.fixed_shipping_rate),
+			shipping_base_fee: Number(seller.shipping_base_fee),
+			shipping_price_per_km: Number(seller.shipping_price_per_km),
+			max_delivery_radius_km: toNumberOrNull(seller.max_delivery_radius_km),
+			latitude: toNumberOrNull(seller.latitude),
+			longitude: toNumberOrNull(seller.longitude),
+			pricing_mode:
+				seller.latitude !== null && seller.longitude !== null
+					? "POR_KM"
+					: "TAXA_FIXA",
 		};
 	}
 }
