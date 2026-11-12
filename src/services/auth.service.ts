@@ -5,7 +5,10 @@ import { AppDataSource } from "@/config/database";
 import { Seller } from "@/entities/Seller";
 import { AppError } from "@/errors/AppError";
 import { userRepository } from "@/repositories/user.repository";
-import { extractStructuredAddress } from "@/schemas/address.schema";
+import {
+	composeLegacyAddress,
+	extractStructuredAddress,
+} from "@/schemas/address.schema";
 import type { LoginInput, RegisterInput } from "@/schemas/auth.schema";
 
 export class AuthService {
@@ -42,7 +45,9 @@ export class AuthService {
 			cpf: data.cpf,
 			role: data.role,
 			phone: data.phone || null,
-			address: data.address || null,
+			// O texto legado é derivado do endereço estruturado; o `address` enviado
+			// sozinho (formato antigo) só é usado quando não há campos estruturados.
+			address: composeLegacyAddress(structured) ?? (data.address || null),
 			zip_code: structured.zip_code ?? null,
 			street: structured.street ?? null,
 			number: structured.number ?? null,

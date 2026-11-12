@@ -4,7 +4,10 @@ import { UserRole } from "@/entities/enums";
 import { Seller } from "@/entities/Seller";
 import { AppError } from "@/errors/AppError";
 import { userRepository } from "@/repositories/user.repository";
-import { extractStructuredAddress } from "@/schemas/address.schema";
+import {
+	composeLegacyAddress,
+	extractStructuredAddress,
+} from "@/schemas/address.schema";
 import type {
 	UpdatePasswordInput,
 	UpdateProfileInput,
@@ -28,7 +31,6 @@ export class PersonService {
 
 		if (data.name !== undefined) user.name = data.name;
 		if (data.phone !== undefined) user.phone = data.phone;
-		if (data.address !== undefined) user.address = data.address;
 		if (structured.zip_code !== undefined) user.zip_code = structured.zip_code;
 		if (structured.street !== undefined) user.street = structured.street;
 		if (structured.number !== undefined) user.number = structured.number;
@@ -38,6 +40,18 @@ export class PersonService {
 			user.neighborhood_name = structured.neighborhood_name;
 		if (structured.city !== undefined) user.city = structured.city;
 		if (structured.state !== undefined) user.state = structured.state;
+
+		// O texto legado `address` é derivado do endereço estruturado (fonte de verdade).
+		// Se algum campo estruturado veio na requisição, recompõe o texto a partir do
+		// resultado final; o `address` enviado sozinho (formato antigo) segue aceito.
+		const structuredChanged = Object.keys(structured).length > 0;
+		if (structuredChanged) {
+			user.address =
+				composeLegacyAddress(user) ??
+				(data.address !== undefined ? data.address : null);
+		} else if (data.address !== undefined) {
+			user.address = data.address;
+		}
 		if (data.neighborhood_id !== undefined)
 			user.neighborhood_id = data.neighborhood_id;
 
