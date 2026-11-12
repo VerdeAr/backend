@@ -185,19 +185,22 @@ export class SaleService {
 				);
 			}
 
-			// Validação RF-40: Entrega no endereço exige endereço estruturado completo no cadastro
+			// Validação RF-40: Entrega no endereço exige endereço completo no cadastro.
+			// Usuários anteriores à VER-63 que só têm o texto livre (`address`) continuam
+			// podendo comprar até migrarem para o endereço estruturado.
 			if (deliveryType === DeliveryType.ENTREGA) {
 				const customer = await manager.findOne(User, {
 					where: { id: userId },
 				});
-				const hasCompleteAddress =
+				const hasStructuredAddress =
 					Boolean(customer?.zip_code) &&
 					Boolean(customer?.street) &&
 					Boolean(customer?.number) &&
 					Boolean(customer?.city) &&
 					Boolean(customer?.state);
+				const hasLegacyAddress = Boolean(customer?.address?.trim());
 
-				if (!hasCompleteAddress) {
+				if (!hasStructuredAddress && !hasLegacyAddress) {
 					throw new AppError(
 						"Para entrega no endereço, é obrigatório preencher o endereço completo (CEP, logradouro, número, cidade e UF) no perfil.",
 						400,
