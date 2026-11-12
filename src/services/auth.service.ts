@@ -5,6 +5,10 @@ import { AppDataSource } from "@/config/database";
 import { Seller } from "@/entities/Seller";
 import { AppError } from "@/errors/AppError";
 import { userRepository } from "@/repositories/user.repository";
+import {
+	composeLegacyAddress,
+	extractStructuredAddress,
+} from "@/schemas/address.schema";
 import type { LoginInput, RegisterInput } from "@/schemas/auth.schema";
 
 export class AuthService {
@@ -30,6 +34,10 @@ export class AuthService {
 		}
 
 		const hashedPassword = await bcrypt.hash(data.password, 10);
+		const structured = extractStructuredAddress(
+			data as Record<string, unknown>,
+		);
+
 		const user = userRepository.create({
 			name: data.name,
 			email: data.email,
@@ -37,7 +45,16 @@ export class AuthService {
 			cpf: data.cpf,
 			role: data.role,
 			phone: data.phone || null,
-			address: data.address || null,
+			// O texto legado é derivado do endereço estruturado; o `address` enviado
+			// sozinho (formato antigo) só é usado quando não há campos estruturados.
+			address: composeLegacyAddress(structured) ?? (data.address || null),
+			zip_code: structured.zip_code ?? null,
+			street: structured.street ?? null,
+			number: structured.number ?? null,
+			complement: structured.complement ?? null,
+			neighborhood_name: structured.neighborhood_name ?? null,
+			city: structured.city ?? null,
+			state: structured.state ?? null,
 			neighborhood_id: data.neighborhood_id || null,
 			fixed_shipping_rate: data.role === "VENDEDOR" ? 0.0 : null,
 		});

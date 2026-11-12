@@ -40,7 +40,7 @@ Requisitos do produto, com o estado de cada um. O VerdeAr é um marketplace que 
 | RF-06 | O usuário edita nome, telefone, endereço e bairro; o Vendedor também edita nome da fazenda e descrição. | B, F | Implementado | VER-38 |
 | RF-07 | O usuário troca a senha informando a senha atual e confirmando a nova. | B, F | Implementado | VER-38 |
 | RF-08 | O Vendedor define o valor do frete fixo (não negativo; inicia em R$ 0,00). | B, F | Implementado | VER-38 |
-| RF-09 | O endereço é estruturado (CEP, logradouro, número, complemento, bairro, cidade e UF), com autopreenchimento pelo ViaCEP no cadastro, no perfil e no checkout. | B, F | Planejado | VER-62 |
+| RF-09 | O endereço é estruturado (CEP, logradouro, número, complemento, bairro, cidade e UF), com autopreenchimento pelo ViaCEP no cadastro, no perfil e no checkout. | B, F | Parcial | VER-63 (backend), VER-64 (frontend) |
 
 ### 2.2 Vitrine e catálogo
 

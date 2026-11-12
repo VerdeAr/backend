@@ -35,6 +35,27 @@ export class User {
 	@Column({ type: "varchar", length: 255, nullable: true })
 	address!: string | null;
 
+	@Column({ type: "varchar", length: 8, nullable: true })
+	zip_code!: string | null;
+
+	@Column({ type: "varchar", length: 255, nullable: true })
+	street!: string | null;
+
+	@Column({ type: "varchar", length: 20, nullable: true })
+	number!: string | null;
+
+	@Column({ type: "varchar", length: 100, nullable: true })
+	complement!: string | null;
+
+	@Column({ type: "varchar", length: 100, nullable: true })
+	neighborhood_name!: string | null;
+
+	@Column({ type: "varchar", length: 100, nullable: true })
+	city!: string | null;
+
+	@Column({ type: "varchar", length: 2, nullable: true })
+	state!: string | null;
+
 	@Column({ type: "uuid", name: "neighborhood_id", nullable: true })
 	neighborhood_id!: string | null;
 

@@ -306,6 +306,43 @@ export const swaggerDoc = {
 						nullable: true,
 						example: "Rua das Flores, 120",
 					},
+					zip_code: {
+						type: "string",
+						nullable: true,
+						description: "CEP com 8 dígitos numéricos",
+						example: "86300000",
+					},
+					street: {
+						type: "string",
+						nullable: true,
+						example: "Rua das Flores",
+					},
+					number: {
+						type: "string",
+						nullable: true,
+						example: "120",
+					},
+					complement: {
+						type: "string",
+						nullable: true,
+						example: "Apto 101",
+					},
+					neighborhood_name: {
+						type: "string",
+						nullable: true,
+						example: "Centro",
+					},
+					city: {
+						type: "string",
+						nullable: true,
+						example: "Cornélio Procópio",
+					},
+					state: {
+						type: "string",
+						nullable: true,
+						description: "Sigla da UF (2 caracteres maiúsculos)",
+						example: "PR",
+					},
 					neighborhood_id: {
 						type: "string",
 						format: "uuid",
@@ -1398,6 +1435,72 @@ export const swaggerDoc = {
 										nullable: true,
 										example: "Estrada Rural, Km 10",
 									},
+									zip_code: {
+										type: "string",
+										nullable: true,
+										description:
+											"CEP com 8 dígitos ou com máscara (ex: 86300-000). Caso `zip_code` e `cep` sejam informados simultaneamente com valores distintos, `zip_code` prevalece.",
+										example: "86300000",
+									},
+									cep: {
+										type: "string",
+										nullable: true,
+										description:
+											"Alias aceito para `zip_code` (CEP com 8 dígitos ou com máscara). Se ambos forem enviados, `zip_code` prevalece.",
+										example: "86300-000",
+									},
+									street: {
+										type: "string",
+										maxLength: 255,
+										nullable: true,
+										description: "Logradouro/Rua",
+										example: "Estrada Rural",
+									},
+									number: {
+										type: "string",
+										maxLength: 20,
+										nullable: true,
+										description: "Número",
+										example: "Km 10",
+									},
+									complement: {
+										type: "string",
+										maxLength: 100,
+										nullable: true,
+										description: "Complemento",
+										example: "Chácara 4",
+									},
+									neighborhood_name: {
+										type: "string",
+										maxLength: 100,
+										nullable: true,
+										description:
+											"Nome do bairro em texto. Caso `neighborhood_name` e `neighborhood` sejam enviados juntos, `neighborhood_name` prevalece.",
+										example: "Zona Rural",
+									},
+									neighborhood: {
+										type: "string",
+										maxLength: 100,
+										nullable: true,
+										description:
+											"Nome do bairro em texto (alias aceito pelo frontend; mapeado internamente para `neighborhood_name`).",
+										example: "Zona Rural",
+									},
+									city: {
+										type: "string",
+										maxLength: 100,
+										nullable: true,
+										description: "Nome da cidade",
+										example: "Cornélio Procópio",
+									},
+									state: {
+										type: "string",
+										maxLength: 2,
+										nullable: true,
+										description:
+											"Sigla da UF do estado (2 caracteres maiúsculos)",
+										example: "PR",
+									},
 									neighborhood_id: {
 										type: "string",
 										format: "uuid",
@@ -1564,6 +1667,72 @@ export const swaggerDoc = {
 									name: { type: "string", minLength: 2, maxLength: 100 },
 									phone: { type: "string", maxLength: 20, nullable: true },
 									address: { type: "string", maxLength: 255, nullable: true },
+									zip_code: {
+										type: "string",
+										nullable: true,
+										description:
+											"CEP com 8 dígitos ou com máscara (ex: 86300-000). Caso `zip_code` e `cep` sejam informados simultaneamente com valores distintos, `zip_code` prevalece.",
+										example: "86300000",
+									},
+									cep: {
+										type: "string",
+										nullable: true,
+										description:
+											"Alias aceito para `zip_code` (CEP com 8 dígitos ou com máscara). Se ambos forem enviados, `zip_code` prevalece.",
+										example: "86300-000",
+									},
+									street: {
+										type: "string",
+										maxLength: 255,
+										nullable: true,
+										description: "Logradouro/Rua",
+										example: "Rua das Palmeiras",
+									},
+									number: {
+										type: "string",
+										maxLength: 20,
+										nullable: true,
+										description: "Número",
+										example: "450",
+									},
+									complement: {
+										type: "string",
+										maxLength: 100,
+										nullable: true,
+										description: "Complemento",
+										example: "Bloco B",
+									},
+									neighborhood_name: {
+										type: "string",
+										maxLength: 100,
+										nullable: true,
+										description:
+											"Nome do bairro em texto. Caso `neighborhood_name` e `neighborhood` sejam enviados juntos, `neighborhood_name` prevalece.",
+										example: "Centro",
+									},
+									neighborhood: {
+										type: "string",
+										maxLength: 100,
+										nullable: true,
+										description:
+											"Nome do bairro em texto (alias aceito pelo frontend; mapeado internamente para `neighborhood_name`).",
+										example: "Centro",
+									},
+									city: {
+										type: "string",
+										maxLength: 100,
+										nullable: true,
+										description: "Nome da cidade",
+										example: "Cornélio Procópio",
+									},
+									state: {
+										type: "string",
+										maxLength: 2,
+										nullable: true,
+										description:
+											"Sigla da UF do estado (2 caracteres maiúsculos)",
+										example: "PR",
+									},
 									neighborhood_id: {
 										type: "string",
 										format: "uuid",
