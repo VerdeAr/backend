@@ -23,7 +23,8 @@ export class User {
 	@Column({ type: "varchar", length: 150, unique: true })
 	email!: string;
 
-	@Column({ type: "varchar" })
+	// Fora de toda consulta por padrão (VER-108); quem precisa do hash pede via `userRepository.*WithPassword`
+	@Column({ type: "varchar", select: false })
 	password!: string;
 
 	@Column({ type: "varchar", length: 14, unique: true, nullable: true })

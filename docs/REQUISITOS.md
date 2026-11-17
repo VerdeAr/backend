@@ -135,7 +135,7 @@ Requisitos do produto, com o estado de cada um. O VerdeAr é um marketplace que 
 
 | ID | Categoria | Requisito | Estado |
 |---|---|---|---|
-| RNF-01 | Segurança | Senhas são guardadas com hash bcrypt; nenhuma senha ou token é gravado no código, e a configuração vem de variáveis de ambiente. | Implementado |
+| RNF-01 | Segurança | Senhas são guardadas com hash bcrypt e o hash nunca sai nas respostas da API (coluna fora das consultas por padrão); nenhuma senha ou token é gravado no código, e a configuração vem de variáveis de ambiente. | Implementado (VER-108) |
 | RNF-02 | Segurança | Rotas privadas exigem JWT válido (401 sem token) e rotas de Vendedor validam o papel (403). | Implementado |
 | RNF-03 | Segurança | O JWT fica em cookie `HttpOnly` (`Secure` em produção, `SameSite`), inacessível por `document.cookie` e `localStorage`; o Axios envia com `withCredentials`. | Em desenvolvimento (VER-74) |
 | RNF-04 | Segurança | O CORS libera apenas as origens configuradas em `CORS_ORIGIN`. | Implementado |
@@ -159,6 +159,7 @@ Requisitos do produto, com o estado de cada um. O VerdeAr é um marketplace que 
 | RNF-22 | Idioma | Interface, mensagens de erro, comentários e documentação em português do Brasil. | Implementado |
 | RNF-23 | Custo | Serviços externos devem caber nas cotas gratuitas: Resend (3.000 e-mails/mês), Cloudflare R2 (10 GB), ViaCEP, OpenRouteService e OpenStreetMap. | Planejado |
 | RNF-24 | Observabilidade | A API expõe `GET /health` e `GET /ready` (este confere o banco). A disponibilidade da aplicação e da API de cada ambiente é verificada a cada 15 minutos por um workflow agendado, que falha e notifica quando algo está fora do ar. | Implementado (VER-98, VER-102 e VER-105) |
+| RNF-25 | Privacidade | O chat expõe ao outro participante só nome e, do vendedor, nome da fazenda; e-mail, CPF, telefone e CNPJ ficam de fora (LGPD). | Implementado (VER-108) |
 
 ---
 
