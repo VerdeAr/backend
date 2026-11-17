@@ -56,7 +56,7 @@ export class PersonService {
 	}
 
 	async updatePassword(userId: string, data: UpdatePasswordInput) {
-		const user = await userRepository.findOne({ where: { id: userId } });
+		const user = await userRepository.findByIdWithPassword(userId);
 		if (!user) {
 			throw new AppError("Usuário não encontrado.", 404);
 		}

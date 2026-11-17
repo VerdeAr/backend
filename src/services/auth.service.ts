@@ -72,10 +72,7 @@ export class AuthService {
 	}
 
 	async login(data: LoginInput) {
-		const user = await userRepository.findOne({
-			where: { email: data.email },
-			relations: { neighborhood: true, seller: true },
-		});
+		const user = await userRepository.findByEmailWithPassword(data.email);
 
 		if (!user) {
 			throw new AppError("Credenciais inválidas.", 401);
