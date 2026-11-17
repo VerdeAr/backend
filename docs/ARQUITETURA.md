@@ -185,6 +185,7 @@ Pontos importantes do modelo:
 - CPF validado e normalizado para 11 dígitos; e-mail, CPF e CNPJ duplicados retornam 409.
 - Senha com no mínimo 6 caracteres. O papel é definido no cadastro; o perfil `Seller` é criado automaticamente para vendedores.
 - A troca de senha exige a senha atual correta.
+- **Senha fora das consultas (VER-108):** a coluna `password` tem `select: false` na entidade `User`, então nenhuma consulta ou join devolve o hash por descuido. Só o login (`userRepository.findByEmailWithPassword`) e a troca de senha (`findByIdWithPassword`) pedem a coluna explicitamente.
 
 ### Catálogo
 - A vitrine pública só lista produtos **ativos e com estoque maior que zero** (`disponivel=true` por padrão).
@@ -252,6 +253,10 @@ stateDiagram-v2
 - **Recusa** (`aceitar: false`): cancela o **pedido inteiro**, inclusive em pedido com mais de um vendedor, e devolve o estoque de todos os itens.
 - O cliente vê a proposta pendente em `pending_adjustment` no histórico de compras e no detalhe da compra. Pedido de outro cliente devolve 404, sem revelar que existe.
 - Não há prazo para o cliente responder.
+
+### Chat
+- As respostas de `/chats` e as mensagens trazem os participantes só com os campos públicos (VER-108): `customer` e `seller.user` com `id` e `name`, `seller` com `id`, `user_id` e `farm_name`, e `sender` com `id` e `name`. E-mail, CPF, telefone, CNPJ e senha nunca são enviados ao outro participante.
+- A seleção fica centralizada em `chatRepository.withParticipants()` e `messageRepository.withSender()`, no mesmo padrão de `addSelect` do `product.repository`. Não use `relations: { customer: true }`, `relations: { sender: true }` nem `leftJoinAndSelect` nos usuários do chat. O `tests/chat-privacy.test.ts` falha se alguma dessas chaves voltar a aparecer.
 
 ### Avaliações
 - Só o cliente dono da venda avalia, apenas vendas `FINALIZADA` e uma vez por venda.

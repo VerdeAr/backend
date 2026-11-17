@@ -1206,6 +1206,7 @@ export const swaggerDoc = {
 						example: "Olá! Sim, temos estoque fresco hoje.",
 					},
 					is_read: { type: "boolean", example: false },
+					sender: { $ref: "#/components/schemas/ChatParticipantUser" },
 					created_at: { type: "string", format: "date-time" },
 					updated_at: { type: "string", format: "date-time" },
 				},
@@ -1217,6 +1218,44 @@ export const swaggerDoc = {
 					"is_read",
 					"created_at",
 				],
+			},
+			ChatParticipantUser: {
+				type: "object",
+				description:
+					"Dados públicos de um participante do chat. E-mail, CPF, telefone e senha nunca são enviados (VER-108).",
+				properties: {
+					id: {
+						type: "string",
+						format: "uuid",
+						example: "f6a7b8c9-d0e1-2345-f678-901234567890",
+					},
+					name: { type: "string", example: "Maria Souza" },
+				},
+				required: ["id", "name"],
+			},
+			ChatParticipantSeller: {
+				type: "object",
+				description:
+					"Dados públicos do vendedor no chat. CNPJ e descrição não são enviados (VER-108).",
+				properties: {
+					id: {
+						type: "string",
+						format: "uuid",
+						example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+					},
+					user_id: {
+						type: "string",
+						format: "uuid",
+						example: "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+					},
+					farm_name: {
+						type: "string",
+						nullable: true,
+						example: "Sítio Boa Vista",
+					},
+					user: { $ref: "#/components/schemas/ChatParticipantUser" },
+				},
+				required: ["id", "user_id"],
 			},
 			ChatResponse: {
 				type: "object",
@@ -1246,6 +1285,8 @@ export const swaggerDoc = {
 						format: "date-time",
 						nullable: true,
 					},
+					customer: { $ref: "#/components/schemas/ChatParticipantUser" },
+					seller: { $ref: "#/components/schemas/ChatParticipantSeller" },
 					created_at: { type: "string", format: "date-time" },
 					updated_at: { type: "string", format: "date-time" },
 				},
