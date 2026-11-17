@@ -3,6 +3,16 @@ import { AppDataSource } from "@/config/database";
 import { Message } from "@/entities/Message";
 
 export const messageRepository = AppDataSource.getRepository(Message).extend({
+	/**
+	 * Consulta base da mensagem com o remetente reduzido a `id` e `name` (VER-108).
+	 * Nunca use `relations: { sender: true }`: isso devolveria os dados pessoais do remetente.
+	 */
+	withSender() {
+		return this.createQueryBuilder("message")
+			.leftJoin("message.sender", "sender")
+			.addSelect(["sender.id", "sender.name"]);
+	},
+
 	async findByChatId(
 		chatId: string,
 		limit = 50,
@@ -10,13 +20,18 @@ export const messageRepository = AppDataSource.getRepository(Message).extend({
 		order: "ASC" | "DESC" = "DESC",
 	): Promise<[Message[], number]> {
 		const skip = (page - 1) * limit;
-		return this.findAndCount({
-			where: { chat_id: chatId },
-			relations: { sender: true },
-			order: { created_at: order },
-			take: limit,
-			skip,
-		});
+		return this.withSender()
+			.where("message.chat_id = :chatId", { chatId })
+			.orderBy("message.created_at", order)
+			.skip(skip)
+			.take(limit)
+			.getManyAndCount();
+	},
+
+	async findByIdWithSender(messageId: string): Promise<Message | null> {
+		return this.withSender()
+			.where("message.id = :messageId", { messageId })
+			.getOne();
 	},
 
 	async markAsRead(chatId: string, excludedSenderId: string): Promise<number> {
