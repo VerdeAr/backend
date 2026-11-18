@@ -82,7 +82,7 @@ Requisitos do produto, com o estado de cada um. O VerdeAr é um marketplace que 
 
 | ID | Requisito | Camada | Estado | Ref. |
 |---|---|:-:|---|---|
-| RF-40 | O checkout é bloqueado com carrinho vazio e, em Entrega, exige endereço cadastrado. | B, F | Implementado | VER-41 |
+| RF-40 | O checkout é bloqueado com carrinho vazio e, em Entrega, exige endereço completo cadastrado (CEP, logradouro, número, cidade e UF). Clientes anteriores à VER-63, só com o texto livre, continuam podendo comprar. | B, F | Implementado | VER-41, VER-63 |
 | RF-41 | O checkout cria o pedido com status `ABERTA`, grava o preço unitário de cada item e baixa o estoque em uma única transação (tudo ou nada). | B | Implementado | VER-41 |
 | RF-42 | Ao confirmar, o carrinho é esvaziado e o cliente vê a tela de confirmação com as instruções de pagamento. | B, F | Implementado | VER-41 |
 | RF-43 | O cliente consulta o histórico de compras e o detalhe de cada uma, vendo apenas as próprias. | B, F | Implementado | VER-41 |

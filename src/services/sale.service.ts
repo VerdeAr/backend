@@ -186,8 +186,9 @@ export class SaleService {
 			}
 
 			// Validação RF-40: Entrega no endereço exige endereço completo no cadastro.
-			// Usuários anteriores à VER-63 que só têm o texto livre (`address`) continuam
-			// podendo comprar até migrarem para o endereço estruturado.
+			// O texto livre (`address`) só vale para usuários anteriores à VER-63, que não
+			// têm nenhum campo estruturado. O `address` é derivado dos campos estruturados,
+			// então um endereço incompleto também gera texto e não pode passar por ele.
 			if (deliveryType === DeliveryType.ENTREGA) {
 				const customer = await manager.findOne(User, {
 					where: { id: userId },
@@ -198,9 +199,20 @@ export class SaleService {
 					Boolean(customer?.number) &&
 					Boolean(customer?.city) &&
 					Boolean(customer?.state);
-				const hasLegacyAddress = Boolean(customer?.address?.trim());
+				const hasAnyStructuredField = [
+					customer?.zip_code,
+					customer?.street,
+					customer?.number,
+					customer?.complement,
+					customer?.neighborhood_name,
+					customer?.city,
+					customer?.state,
+				].some(Boolean);
+				const addressOk = hasAnyStructuredField
+					? hasStructuredAddress
+					: Boolean(customer?.address?.trim());
 
-				if (!hasStructuredAddress && !hasLegacyAddress) {
+				if (!addressOk) {
 					throw new AppError(
 						"Para entrega no endereço, é obrigatório preencher o endereço completo (CEP, logradouro, número, cidade e UF) no perfil.",
 						400,

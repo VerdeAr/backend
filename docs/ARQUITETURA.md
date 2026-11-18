@@ -204,7 +204,7 @@ Pontos importantes do modelo:
 Executado em uma única transação (`SaleService.checkout`):
 
 1. Carrega o carrinho e rejeita carrinho vazio.
-2. Define entrega (corpo ou carrinho) e pagamento (corpo, carrinho ou `Dinheiro` como padrão).
+2. Define entrega (corpo ou carrinho) e pagamento (corpo, carrinho ou `Dinheiro` como padrão). Em `ENTREGA`, exige o endereço completo do cliente (CEP, logradouro, número, cidade e UF); sem ele responde 400. Como o `address` é derivado dos campos estruturados, o texto livre só vale para clientes anteriores à VER-63 que não têm nenhum campo estruturado. Quem tem algum campo estruturado precisa do conjunto completo.
 3. Para cada item, aplica `pessimistic_write` no produto, valida existência, status ativo e estoque, e decrementa o estoque.
 4. Calcula subtotal, frete por produtor e total.
 5. Cria `Sale` (`ABERTA`), a primeira entrada do histórico de status, `SaleProduct` com o preço unitário congelado e `Payment`.
