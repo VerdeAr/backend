@@ -149,7 +149,8 @@ Pontos importantes do modelo:
 - **Integridade referencial:** `sales.customer_id` e `sale_products.product_id` usam `ON DELETE RESTRICT`, preservando o histórico de pedidos. As demais relações usam `CASCADE` ou `SET NULL`.
 - **Avaliação única por venda:** garantida na camada de service; não há constraint `UNIQUE` em `reviews.sale_id`.
 - **Frete fixo:** fica em `users.fixed_shipping_rate` (inicia em R$ 0,00 para vendedores).
-- **Migrations:** `InitialSchema1790124561841` e `SaleAdjustmentsAndStatusHistory1793827055534` (VER-95: novos status, ajustes, histórico e backfill do histórico dos pedidos existentes), registradas manualmente em `config/database.ts`. Novas migrations precisam ser adicionadas à lista `migrations` do DataSource.
+- **Endereço estruturado (VER-63):** `users` armazena o endereço estruturado em colunas específicas (`zip_code`, `street`, `number`, `complement`, `neighborhood_name`, `city`, `state`), que são a **fonte de verdade**. O campo legado `address` é **derivado** deles: no cadastro (`POST /auth/register`) e na atualização de perfil (`PUT /pessoa/cadastro`), sempre que algum campo estruturado é enviado, o texto é recomposto por `composeLegacyAddress` (`src/schemas/address.schema.ts`) a partir do endereço final do usuário (limitado a 255 caracteres), e um `address` enviado junto é ignorado. O `address` enviado sozinho segue aceito para clientes antigos. Na leitura, `formatFullAddress` monta o texto a partir dos campos estruturados e usa o `address` apenas como fallback de cadastros legados; consultas com `select` explícito (como `findSellerOrderDetail`) precisam selecionar as colunas estruturadas. Na resposta da API (`UserResponse`), o texto do bairro vem sempre em `neighborhood_name`, preservando o campo `neighborhood` para o objeto do relacionamento TypeORM.
+- **Migrations:** `InitialSchema1790124561841`, `AddStructuredAddressToUsers1790124600000` (VER-63) e `SaleAdjustmentsAndStatusHistory1793827055534` (VER-95: novos status, ajustes, histórico e backfill do histórico dos pedidos existentes), registradas manualmente em `src/config/database.ts`. Novas migrations precisam ser adicionadas à lista `migrations` do DataSource.
 
 ---
 
@@ -204,7 +205,7 @@ Pontos importantes do modelo:
 Executado em uma única transação (`SaleService.checkout`):
 
 1. Carrega o carrinho e rejeita carrinho vazio.
-2. Define entrega (corpo ou carrinho) e pagamento (corpo, carrinho ou `Dinheiro` como padrão).
+2. Define entrega (corpo ou carrinho) e pagamento (corpo, carrinho ou `Dinheiro` como padrão). Em `ENTREGA`, exige o endereço completo do cliente (CEP, logradouro, número, cidade e UF); sem ele responde 400. Como o `address` é derivado dos campos estruturados, o texto livre só vale para clientes anteriores à VER-63 que não têm nenhum campo estruturado. Quem tem algum campo estruturado precisa do conjunto completo.
 3. Para cada item, aplica `pessimistic_write` no produto, valida existência, status ativo e estoque, e decrementa o estoque.
 4. Calcula subtotal, frete por produtor e total.
 5. Cria `Sale` (`ABERTA`), a primeira entrada do histórico de status, `SaleProduct` com o preço unitário congelado e `Payment`.

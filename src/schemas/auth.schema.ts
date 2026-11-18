@@ -1,8 +1,9 @@
 import { cnpj as cnpjValidator, cpf as cpfValidator } from "cpf-cnpj-validator";
 import { z } from "zod";
 import { UserRole } from "@/entities/enums";
+import { structuredAddressInputSchema } from "./address.schema";
 
-export const registerSchema = z.object({
+const baseRegisterSchema = z.object({
 	name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").max(100),
 	email: z.email("Formato de e-mail inválido"),
 	password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres"),
@@ -32,6 +33,10 @@ export const registerSchema = z.object({
 		.transform((val) => (val ? val.replace(/\D/g, "") : null)),
 	farm_name: z.string().max(150).optional().nullable(),
 });
+
+export const registerSchema = baseRegisterSchema.extend(
+	structuredAddressInputSchema.shape,
+);
 
 export const loginSchema = z.object({
 	email: z.email("Formato de e-mail inválido"),

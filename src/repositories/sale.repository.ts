@@ -42,6 +42,15 @@ export const saleRepository = AppDataSource.getRepository(Sale).extend({
 				"customer.email",
 				"customer.phone",
 				"customer.address",
+				// Endereço estruturado (VER-63): sem estes campos o formatFullAddress
+				// só enxerga o texto legado e devolve null para cadastros novos.
+				"customer.zip_code",
+				"customer.street",
+				"customer.number",
+				"customer.complement",
+				"customer.neighborhood_name",
+				"customer.city",
+				"customer.state",
 			])
 			.leftJoin("customer.neighborhood", "neighborhood")
 			.addSelect(["neighborhood.id", "neighborhood.name"])
