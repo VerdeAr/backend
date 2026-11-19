@@ -109,7 +109,7 @@ O mesmo token de API serve para todas as aplicações; só a URL (com o `uuid`) 
 
 > **Limite da verificação:** o webhook do Coolify apenas enfileira o deploy e responde na hora, e a versão antiga continua respondendo `/ready` até a nova ficar saudável. Por isso a etapa *Verificar* espera `DEPLOY_VERIFY_DELAY` segundos antes de consultar e serve como confirmação de que a API está de pé, não como prova de que a versão nova já entrou. O acompanhamento do deploy em si está nos logs do Coolify, e o `monitoring.yml` detecta quedas depois.
 
-As variáveis de ambiente da aplicação (`DB_*`, `JWT_SECRET`, `CORS_ORIGIN` etc.) ficam configuradas na própria plataforma, nunca no repositório.
+As variáveis de ambiente da aplicação (`DB_*`, `JWT_SECRET`, `CORS_ORIGIN`, `ORS_API_KEY` etc.) ficam configuradas na própria plataforma, nunca no repositório.
 
 #### Migrando uma aplicação existente (build pelo Git) para Docker Image
 
@@ -145,7 +145,7 @@ services:
       - "3000:3000"
 ```
 
-Variáveis do `.env`: `PORT` (padrão 3000), `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASS`, `DB_NAME`, `JWT_SECRET` e `CORS_ORIGIN`. O banco de dados é externo à imagem. As migrations rodam sozinhas na inicialização, e o seed (`npm run seed`) é manual, uma vez por ambiente novo.
+Variáveis do `.env`: `PORT` (padrão 3000), `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASS`, `DB_NAME`, `JWT_SECRET`, `CORS_ORIGIN` e `ORS_API_KEY` (OpenRouteService, frete por km; opcionais `ORS_TIMEOUT_MS` e `SHIPPING_ROUTE_RATE_LIMIT`). O banco de dados é externo à imagem. As migrations rodam sozinhas na inicialização, e o seed (`npm run seed`) é manual, uma vez por ambiente novo.
 
 A imagem declara um `HEALTHCHECK` em `/health`, e `docker ps` mostra `healthy` quando a API está de pé.
 

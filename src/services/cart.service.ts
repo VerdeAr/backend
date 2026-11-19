@@ -5,8 +5,23 @@ import {
 	cartItemRepository,
 	cartRepository,
 	productRepository,
+	userRepository,
 } from "@/repositories";
 import type { AddCartItemInput } from "@/schemas/cart.schema";
+import {
+	outOfRadiusMessage,
+	type SellerShippingQuote,
+	type SellerShippingSource,
+	shippingService,
+} from "./shipping.service";
+
+// Situação do frete no carrinho (VER-91). O carrinho nunca trava por causa do frete:
+// em caso de problema, mostra a mensagem e o checkout recusa a Entrega.
+export type CartShippingStatus =
+	| "OK"
+	| "FORA_DO_RAIO"
+	| "SEM_ENDERECO"
+	| "INDISPONIVEL";
 
 export interface FormattedCartResponse {
 	id: string;
@@ -16,6 +31,10 @@ export interface FormattedCartResponse {
 	items: FormattedCartItem[];
 	subtotal: number;
 	shipping: number;
+	// null quando a modalidade não é Entrega ou o carrinho está vazio
+	shipping_status: CartShippingStatus | null;
+	shipping_message: string | null;
+	shipping_details: SellerShippingQuote[];
 	total: number;
 	total_items: number;
 	created_at: Date;
@@ -59,11 +78,11 @@ export class CartService {
 	/**
 	 * Formata o carrinho calculando subtotal, taxa de entrega por produtor e total geral.
 	 */
-	private formatCart(cart: Cart): FormattedCartResponse {
+	private async formatCart(cart: Cart): Promise<FormattedCartResponse> {
 		let subtotal = 0;
 		let totalItems = 0;
 
-		const distinctSellerShipping = new Map<string, number>();
+		const sellers: SellerShippingSource[] = [];
 
 		const formattedItems: FormattedCartItem[] = (cart.items || []).map(
 			(item) => {
@@ -74,13 +93,10 @@ export class CartService {
 				subtotal += itemTotal;
 				totalItems += quantity;
 
-				// Coleta taxa de frete único por produtor presente no carrinho
+				// Coleta os produtores do carrinho; o frete é calculado uma vez por produtor
 				const seller = item.product?.seller;
 				if (seller?.id) {
-					const sellerRate = Number(seller.user?.fixed_shipping_rate || 0);
-					if (!distinctSellerShipping.has(seller.id)) {
-						distinctSellerShipping.set(seller.id, sellerRate);
-					}
+					sellers.push(seller);
 				}
 
 				return {
@@ -133,12 +149,34 @@ export class CartService {
 
 		// Calcula frete apenas se a modalidade for ENTREGA e houver itens
 		let shipping = 0;
+		let shippingStatus: CartShippingStatus | null = null;
+		let shippingMessage: string | null = null;
+		let shippingDetails: SellerShippingQuote[] = [];
+
 		if (
 			cart.delivery_type === DeliveryType.ENTREGA &&
 			formattedItems.length > 0
 		) {
-			for (const rate of distinctSellerShipping.values()) {
-				shipping += rate;
+			try {
+				const customer = await userRepository.findOne({
+					where: { id: cart.user_id },
+				});
+				shippingDetails = await shippingService.quoteSellers(sellers, customer);
+				shipping = shippingService.sumQuotes(shippingDetails).shipping_amount;
+
+				const outOfRadius = shippingDetails.find(
+					(quote) => !quote.within_radius,
+				);
+				shippingStatus = outOfRadius ? "FORA_DO_RAIO" : "OK";
+				shippingMessage = outOfRadius ? outOfRadiusMessage(outOfRadius) : null;
+			} catch (error) {
+				if (!(error instanceof AppError)) throw error;
+
+				shipping = 0;
+				shippingDetails = [];
+				shippingStatus =
+					error.statusCode === 400 ? "SEM_ENDERECO" : "INDISPONIVEL";
+				shippingMessage = error.message;
 			}
 		}
 
@@ -154,6 +192,9 @@ export class CartService {
 			items: formattedItems,
 			subtotal,
 			shipping,
+			shipping_status: shippingStatus,
+			shipping_message: shippingMessage,
+			shipping_details: shippingDetails,
 			total,
 			total_items: Number(totalItems.toFixed(3)),
 			created_at: cart.created_at,

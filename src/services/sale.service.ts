@@ -18,12 +18,17 @@ import {
 } from "@/entities";
 import { AppError, type ValidationErrorDetail } from "@/errors/AppError";
 import {
+	cartRepository,
 	saleAdjustmentRepository,
 	saleRepository,
 	saleStatusHistoryRepository,
 	sellerRepository,
+	userRepository,
 } from "@/repositories";
-import { formatFullAddress } from "@/schemas/address.schema";
+import {
+	formatFullAddress,
+	hasDeliveryAddress,
+} from "@/schemas/address.schema";
 import type {
 	CheckoutInput,
 	ProposeAdjustmentInput,
@@ -32,6 +37,15 @@ import {
 	ADJUSTABLE_STATUSES,
 	canSellerTransition,
 } from "@/services/sale-status";
+import {
+	outOfRadiusMessage,
+	type SellerShippingQuote,
+	shippingService,
+} from "@/services/shipping.service";
+
+// RF-40: mensagem única para Entrega sem endereço válido no perfil.
+const DELIVERY_ADDRESS_REQUIRED_MESSAGE =
+	"Para entrega no endereço, é obrigatório preencher o endereço completo (CEP, logradouro, número, cidade e UF) no perfil.";
 
 export interface FormattedSaleItem {
 	id: string;
@@ -61,6 +75,9 @@ export interface FormattedPurchase {
 	delivery_type: DeliveryType;
 	status: SaleStatus;
 	total_amount: number;
+	// Frete registrado no checkout (VER-91)
+	shipping_amount: number;
+	shipping_distance_km: number | null;
 	created_at: Date;
 	updated_at: Date;
 	is_reviewed: boolean;
@@ -141,6 +158,42 @@ export interface FormattedSellerOrderDetail {
 
 export class SaleService {
 	/**
+	 * Frete do checkout por produtor, recalculado no servidor (nunca vem do cliente).
+	 * Devolve null quando não há frete a calcular (Retirada ou carrinho vazio); as
+	 * validações de carrinho e modalidade continuam dentro da transação.
+	 */
+	private async quoteCheckoutShipping(
+		userId: string,
+		data?: CheckoutInput,
+	): Promise<Map<string, SellerShippingQuote> | null> {
+		const cart = await cartRepository.findByUserId(userId);
+		const deliveryType = data?.delivery_type || cart?.delivery_type;
+
+		if (deliveryType !== DeliveryType.ENTREGA || !cart?.items?.length) {
+			return null;
+		}
+
+		const sellers = cart.items.flatMap((item) =>
+			item.product?.seller?.id ? [item.product.seller] : [],
+		);
+		const customer = await userRepository.findOne({ where: { id: userId } });
+		// RF-40 antes do frete: endereço inválido recebe o mesmo 400 do checkout,
+		// sem chamar o OpenRouteService com um endereço parcial.
+		if (!hasDeliveryAddress(customer)) {
+			throw new AppError(DELIVERY_ADDRESS_REQUIRED_MESSAGE, 400);
+		}
+		const quotes = await shippingService.quoteSellers(sellers, customer);
+
+		// Entrega fora do raio de algum produtor: recusa sem criar o pedido
+		const outOfRadius = quotes.find((quote) => !quote.within_radius);
+		if (outOfRadius) {
+			throw new AppError(outOfRadiusMessage(outOfRadius), 400);
+		}
+
+		return new Map(quotes.map((quote) => [quote.seller_id, quote]));
+	}
+
+	/**
 	 * Realiza o checkout transacional com garantia ACID:
 	 * 1. Executa sob transação controlada (AppDataSource.transaction).
 	 * 2. Valida o carrinho do usuário e seus itens.
@@ -154,6 +207,10 @@ export class SaleService {
 	 * 10. Em caso de qualquer inconsistência, desfaz todas as alterações (rollback automático).
 	 */
 	async checkout(userId: string, data?: CheckoutInput): Promise<Sale> {
+		// O frete por km depende do OpenRouteService (até 8 s). Ele é calculado ANTES da
+		// transação, para não segurar os locks de estoque durante a chamada externa.
+		const shippingQuotes = await this.quoteCheckoutShipping(userId, data);
+
 		const saleId = await AppDataSource.transaction(async (manager) => {
 			// 1. Carrega o carrinho com itens e produtores
 			const cart = await manager.findOne(Cart, {
@@ -193,30 +250,8 @@ export class SaleService {
 				const customer = await manager.findOne(User, {
 					where: { id: userId },
 				});
-				const hasStructuredAddress =
-					Boolean(customer?.zip_code) &&
-					Boolean(customer?.street) &&
-					Boolean(customer?.number) &&
-					Boolean(customer?.city) &&
-					Boolean(customer?.state);
-				const hasAnyStructuredField = [
-					customer?.zip_code,
-					customer?.street,
-					customer?.number,
-					customer?.complement,
-					customer?.neighborhood_name,
-					customer?.city,
-					customer?.state,
-				].some(Boolean);
-				const addressOk = hasAnyStructuredField
-					? hasStructuredAddress
-					: Boolean(customer?.address?.trim());
-
-				if (!addressOk) {
-					throw new AppError(
-						"Para entrega no endereço, é obrigatório preencher o endereço completo (CEP, logradouro, número, cidade e UF) no perfil.",
-						400,
-					);
+				if (!hasDeliveryAddress(customer)) {
+					throw new AppError(DELIVERY_ADDRESS_REQUIRED_MESSAGE, 400);
 				}
 			}
 
@@ -261,40 +296,51 @@ export class SaleService {
 				await manager.save(product);
 			}
 
-			// 5. Cálculo dos valores: subtotal, frete por produtor e total
+			// 5. Cálculo dos valores: subtotal, frete por produtor (VER-91) e total
 			let subtotal = 0;
-			const distinctSellerShipping = new Map<string, number>();
+			const sellerIds = new Set<string>();
 
 			for (const item of cart.items) {
 				const itemPrice = Number(item.price);
 				const itemQty = Number(item.quantity);
 				subtotal += itemPrice * itemQty;
 
-				const seller = item.product?.seller;
-				if (seller?.id && !distinctSellerShipping.has(seller.id)) {
-					const fixedRate = seller.user?.fixed_shipping_rate
-						? Number(seller.user.fixed_shipping_rate)
-						: 0;
-					distinctSellerShipping.set(seller.id, fixedRate);
-				}
+				const sellerId = item.product?.seller?.id;
+				if (sellerId) sellerIds.add(sellerId);
 			}
 
 			let shipping = 0;
+			let shippingDistanceKm: number | null = null;
 			if (deliveryType === DeliveryType.ENTREGA) {
-				for (const rate of distinctSellerShipping.values()) {
-					shipping += rate;
+				// O carrinho pode ter mudado entre o cálculo do frete e a transação
+				const quotes: SellerShippingQuote[] = [];
+				for (const sellerId of sellerIds) {
+					const quote = shippingQuotes?.get(sellerId);
+					if (!quote) {
+						throw new AppError(
+							"O carrinho foi alterado durante a finalização. Revise o pedido e tente novamente.",
+							409,
+						);
+					}
+					quotes.push(quote);
 				}
+
+				const totals = shippingService.sumQuotes(quotes);
+				shipping = totals.shipping_amount;
+				shippingDistanceKm = totals.shipping_distance_km;
 			}
 
 			subtotal = Number(subtotal.toFixed(2));
 			shipping = Number(shipping.toFixed(2));
 			const totalAmount = Number((subtotal + shipping).toFixed(2));
 
-			// 6. Criação do registro de Venda (Sale)
+			// 6. Criação do registro de Venda (Sale), com o frete registrado
 			const sale = manager.create(Sale, {
 				customer_id: userId,
 				delivery_type: deliveryType,
 				total_amount: totalAmount,
+				shipping_amount: shipping,
+				shipping_distance_km: shippingDistanceKm,
 				status: SaleStatus.ABERTA,
 			});
 			const savedSale = await manager.save(sale);
@@ -1059,6 +1105,12 @@ export class SaleService {
 			delivery_type: sale.delivery_type,
 			status: sale.status,
 			total_amount: Number(sale.total_amount),
+			shipping_amount: Number(sale.shipping_amount ?? 0),
+			shipping_distance_km:
+				sale.shipping_distance_km === null ||
+				sale.shipping_distance_km === undefined
+					? null
+					: Number(sale.shipping_distance_km),
 			created_at: sale.created_at,
 			updated_at: sale.updated_at,
 			is_reviewed: Boolean(review),

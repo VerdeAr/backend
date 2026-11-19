@@ -38,6 +38,14 @@ export class Sale {
 	@Column({ type: "decimal", precision: 10, scale: 2 })
 	total_amount!: number;
 
+	// Frete gravado no checkout (VER-91): não muda depois de criado o pedido
+	@Column({ type: "decimal", precision: 10, scale: 2, default: 0 })
+	shipping_amount!: number;
+
+	// Soma das distâncias de condução dos vendedores com frete por km (nulo = sem distância)
+	@Column({ type: "decimal", precision: 10, scale: 2, nullable: true })
+	shipping_distance_km!: number | null;
+
 	@Column({
 		type: "enum",
 		enum: SaleStatus,

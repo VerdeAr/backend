@@ -36,6 +36,24 @@ export class Seller {
 	@Column({ type: "varchar", length: 150, nullable: true })
 	farm_name!: string | null;
 
+	// Origem do frete por quilômetro (VER-91): ponto da propriedade rural.
+	// Sem origem configurada, o frete usa a taxa fixa antiga (users.fixed_shipping_rate).
+	@Column({ type: "decimal", precision: 10, scale: 7, nullable: true })
+	latitude!: number | null;
+
+	@Column({ type: "decimal", precision: 10, scale: 7, nullable: true })
+	longitude!: number | null;
+
+	@Column({ type: "decimal", precision: 10, scale: 2, default: 0 })
+	shipping_base_fee!: number;
+
+	@Column({ type: "decimal", precision: 10, scale: 2, default: 0 })
+	shipping_price_per_km!: number;
+
+	// Nulo = sem limite de distância para entrega
+	@Column({ type: "decimal", precision: 10, scale: 2, nullable: true })
+	max_delivery_radius_km!: number | null;
+
 	@OneToMany("Shipping", "seller")
 	shippings!: Shipping[];
 
