@@ -1,6 +1,7 @@
 import { cpf } from "cpf-cnpj-validator";
 import { describe, expect, it } from "vitest";
 import {
+	composeLegacyAddress,
 	extractStructuredAddress,
 	formatFullAddress,
 	optionalStateSchema,
@@ -11,6 +12,7 @@ import {
 } from "@/schemas/address.schema";
 import { registerSchema } from "@/schemas/auth.schema";
 import { updateProfileSchema } from "@/schemas/person.schema";
+import { registerUser } from "./helpers/factories";
 
 describe("schemas de endereço estruturado e normalização de CEP (VER-63)", () => {
 	describe("validação de CEP (zipCodeSchema)", () => {
@@ -233,6 +235,115 @@ describe("schemas de endereço estruturado e normalização de CEP (VER-63)", ()
 			expect(parsed.complement).toBe("Sala 2");
 			expect(parsed.neighborhood).toBe("Centro");
 			expect(parsed.city).toBe("Curitiba");
+		});
+	});
+});
+
+describe("address legado derivado do endereço estruturado (revisão do PR #33)", () => {
+	describe("função composeLegacyAddress", () => {
+		it("monta o texto só com os campos estruturados", () => {
+			expect(
+				composeLegacyAddress({
+					zip_code: "86300000",
+					street: "Rua das Flores",
+					number: "120",
+					complement: "Apto 4",
+					neighborhood_name: "Centro",
+					city: "Cornélio Procópio",
+					state: "PR",
+				}),
+			).toBe(
+				"Rua das Flores, 120, Apto 4 - Centro - Cornélio Procópio - PR - CEP: 86300-000",
+			);
+		});
+
+		it("retorna null sem campos estruturados, mesmo havendo texto legado", () => {
+			expect(composeLegacyAddress({})).toBeNull();
+			expect(
+				composeLegacyAddress({ street: null, city: null, state: null }),
+			).toBeNull();
+		});
+
+		it("limita o texto ao tamanho da coluna address (255)", () => {
+			const composed = composeLegacyAddress({
+				street: "R".repeat(255),
+				number: "1",
+				city: "Curitiba",
+				state: "PR",
+			});
+			expect(composed).toHaveLength(255);
+		});
+	});
+
+	describe("cadastro e atualização de perfil", () => {
+		const EXPECTED_STRUCTURED_TEXT =
+			"Rua dos Testes, 100 - Cornélio Procópio - PR - CEP: 86300-000";
+
+		it("cadastro com endereço estruturado preenche o address legado", async () => {
+			const { user } = await registerUser("CLIENTE");
+			expect(user).toMatchObject({ address: EXPECTED_STRUCTURED_TEXT });
+		});
+
+		it("cadastro só com o address legado mantém o texto enviado", async () => {
+			const { user } = await registerUser("CLIENTE", { address: "legado" });
+			expect(user).toMatchObject({
+				address: "Rua dos Testes Legado, 200 - Centro",
+				street: null,
+			});
+		});
+
+		it("atualizar um campo estruturado recompõe o address", async () => {
+			const { client } = await registerUser("CLIENTE");
+
+			const response = await client
+				.put("/pessoa/cadastro")
+				.send({ number: "250", complement: "Casa 2" });
+
+			expect(response.status).toBe(200);
+			expect(response.body.user.address).toBe(
+				"Rua dos Testes, 250, Casa 2 - Cornélio Procópio - PR - CEP: 86300-000",
+			);
+		});
+
+		it("o endereço estruturado prevalece sobre um address enviado junto", async () => {
+			const { client } = await registerUser("CLIENTE");
+
+			const response = await client
+				.put("/pessoa/cadastro")
+				.send({ address: "Texto divergente", street: "Rua Nova" });
+
+			expect(response.status).toBe(200);
+			expect(response.body.user.address).toBe(
+				"Rua Nova, 100 - Cornélio Procópio - PR - CEP: 86300-000",
+			);
+		});
+
+		it("usuário legado que migra para o estruturado tem o address substituído", async () => {
+			const { client } = await registerUser("CLIENTE", { address: "legado" });
+
+			const response = await client.put("/pessoa/cadastro").send({
+				zip_code: "01001-000",
+				street: "Praça da Sé",
+				number: "1",
+				city: "São Paulo",
+				state: "SP",
+			});
+
+			expect(response.status).toBe(200);
+			expect(response.body.user.address).toBe(
+				"Praça da Sé, 1 - São Paulo - SP - CEP: 01001-000",
+			);
+		});
+
+		it("update só com address, sem campos estruturados, segue aceito", async () => {
+			const { client } = await registerUser("CLIENTE", { address: "nenhum" });
+
+			const response = await client
+				.put("/pessoa/cadastro")
+				.send({ address: "Sítio Boa Vista, km 12" });
+
+			expect(response.status).toBe(200);
+			expect(response.body.user.address).toBe("Sítio Boa Vista, km 12");
 		});
 	});
 });

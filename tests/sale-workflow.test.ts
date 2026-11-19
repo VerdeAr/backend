@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
+import { userRepository } from "@/repositories/user.repository";
 import { createClient } from "./helpers/client";
 import {
 	createProduct,
@@ -221,6 +222,36 @@ describe("detalhe do pedido do vendedor", () => {
 			"phone",
 		]);
 		expect(JSON.stringify(response.body)).not.toMatch(/password|cpf/);
+	});
+
+	it("devolve o endereço estruturado do cliente formatado", async () => {
+		// Simula um cadastro com endereço estruturado e sem o texto legado (como os
+		// usuários criados antes do address derivado): o detalhe não pode depender dele
+		await userRepository.update(customer.user.id, { address: null });
+
+		const response = await seller.client.get(`/vendedor/pedidos/${saleId}`);
+
+		expect(response.status).toBe(200);
+		expect(response.body.customer.address).toBe(
+			"Rua dos Testes, 100 - Cornélio Procópio - PR - CEP: 86300-000",
+		);
+	});
+
+	it("cliente legado (só address) tem o texto antigo no detalhe", async () => {
+		const legacyCustomer = await registerUser("CLIENTE", { address: "legado" });
+		const product = await createProduct(seller.client, { stock: 5 });
+		const legacySaleId = await placeOrder(legacyCustomer.client, [
+			{ productId: product.id, quantity: 1 },
+		]);
+
+		const response = await seller.client.get(
+			`/vendedor/pedidos/${legacySaleId}`,
+		);
+
+		expect(response.status).toBe(200);
+		expect(response.body.customer.address).toBe(
+			"Rua dos Testes Legado, 200 - Centro",
+		);
 	});
 
 	it("vendedor sem itens no pedido recebe 403", async () => {

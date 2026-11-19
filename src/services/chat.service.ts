@@ -248,10 +248,10 @@ export class ChatService {
 		chat.last_message_at = savedMessage.created_at;
 		await chatRepository.save(chat);
 
-		const messageWithSender = await messageRepository.findOne({
-			where: { id: savedMessage.id },
-			relations: { sender: true },
-		});
+		// Recarrega com o remetente só com id e nome; a mesma resposta vai para o Socket.io
+		const messageWithSender = await messageRepository.findByIdWithSender(
+			savedMessage.id,
+		);
 
 		return messageWithSender ?? savedMessage;
 	}

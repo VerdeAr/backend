@@ -151,8 +151,8 @@ Pontos importantes do modelo:
 - **Frete fixo:** fica em `users.fixed_shipping_rate` (inicia em R$ 0,00 para vendedores). Desde a VER-91, é a **taxa de reserva** de quem ainda não configurou o frete por km.
 - **Frete por km (VER-91):** `sellers` guarda a origem (`latitude` e `longitude`, `numeric(10,7)`, nulas = sem origem), `shipping_base_fee` e `shipping_price_per_km` (`numeric(10,2)`, padrão 0, não negativos) e `max_delivery_radius_km` (nulo = sem limite). Constraints `CHECK` garantem as faixas válidas.
 - **Frete no pedido (VER-91):** `sales.shipping_amount` (`numeric(10,2)`, padrão 0) e `sales.shipping_distance_km` (nulo quando nenhum produtor cobra por km) são gravados no checkout e não mudam depois. Pedidos anteriores à migration ficam com frete 0, porque o valor real não era registrado.
-- **Endereço estruturado (VER-63):** `users` armazena o endereço estruturado em colunas específicas (`zip_code`, `street`, `number`, `complement`, `neighborhood_name`, `city`, `state`) mantendo o campo `address` como fallback. Na resposta da API (`UserResponse`), o texto do bairro vem sempre em `neighborhood_name`, preservando o campo `neighborhood` para o objeto do relacionamento TypeORM.
-- **Migrations:** `InitialSchema1790124561841`, `AddStructuredAddressToUsers1790124600000` (VER-63) e `SaleAdjustmentsAndStatusHistory1793827055534` (VER-95: novos status, ajustes, histórico e backfill do histórico dos pedidos existentes) e `AddDynamicShippingFields1794441600000` (VER-91: frete por km no vendedor e frete gravado no pedido), registradas manualmente em `src/config/database.ts`. Novas migrations precisam ser adicionadas à lista `migrations` do DataSource.
+- **Endereço estruturado (VER-63):** `users` armazena o endereço estruturado em colunas específicas (`zip_code`, `street`, `number`, `complement`, `neighborhood_name`, `city`, `state`), que são a **fonte de verdade**. O campo legado `address` é **derivado** deles: no cadastro (`POST /auth/register`) e na atualização de perfil (`PUT /pessoa/cadastro`), sempre que algum campo estruturado é enviado, o texto é recomposto por `composeLegacyAddress` (`src/schemas/address.schema.ts`) a partir do endereço final do usuário (limitado a 255 caracteres), e um `address` enviado junto é ignorado. O `address` enviado sozinho segue aceito para clientes antigos. Na leitura, `formatFullAddress` monta o texto a partir dos campos estruturados e usa o `address` apenas como fallback de cadastros legados; consultas com `select` explícito (como `findSellerOrderDetail`) precisam selecionar as colunas estruturadas. Na resposta da API (`UserResponse`), o texto do bairro vem sempre em `neighborhood_name`, preservando o campo `neighborhood` para o objeto do relacionamento TypeORM.
+- **Migrations:** `InitialSchema1790124561841`, `AddStructuredAddressToUsers1790124600000` (VER-63), `SaleAdjustmentsAndStatusHistory1793827055534` (VER-95: novos status, ajustes, histórico e backfill do histórico dos pedidos existentes) e `AddDynamicShippingFields1794441600000` (VER-91: frete por km no vendedor e frete gravado no pedido), registradas manualmente em `src/config/database.ts`. Novas migrations precisam ser adicionadas à lista `migrations` do DataSource.
 
 ---
 
@@ -189,6 +189,7 @@ Pontos importantes do modelo:
 - CPF validado e normalizado para 11 dígitos; e-mail, CPF e CNPJ duplicados retornam 409.
 - Senha com no mínimo 6 caracteres. O papel é definido no cadastro; o perfil `Seller` é criado automaticamente para vendedores.
 - A troca de senha exige a senha atual correta.
+- **Senha fora das consultas (VER-108):** a coluna `password` tem `select: false` na entidade `User`, então nenhuma consulta ou join devolve o hash por descuido. Só o login (`userRepository.findByEmailWithPassword`) e a troca de senha (`findByIdWithPassword`) pedem a coluna explicitamente.
 
 ### Catálogo
 - A vitrine pública só lista produtos **ativos e com estoque maior que zero** (`disponivel=true` por padrão).
@@ -213,7 +214,7 @@ Pontos importantes do modelo:
 Executado em uma única transação (`SaleService.checkout`):
 
 1. Carrega o carrinho e rejeita carrinho vazio.
-2. Define entrega (corpo ou carrinho) e pagamento (corpo, carrinho ou `Dinheiro` como padrão).
+2. Define entrega (corpo ou carrinho) e pagamento (corpo, carrinho ou `Dinheiro` como padrão). Em `ENTREGA`, exige o endereço completo do cliente (CEP, logradouro, número, cidade e UF); sem ele responde 400. Como o `address` é derivado dos campos estruturados, o texto livre só vale para clientes anteriores à VER-63 que não têm nenhum campo estruturado. Quem tem algum campo estruturado precisa do conjunto completo.
 3. Para cada item, aplica `pessimistic_write` no produto, valida existência, status ativo e estoque, e decrementa o estoque.
 4. Calcula subtotal, frete por produtor e total. O frete é calculado no servidor **antes** de abrir a transação, para a chamada ao OpenRouteService não segurar os bloqueios de estoque; dentro da transação, se o carrinho tiver mudado de produtores, a operação é recusada com 409. Entrega fora do raio de algum produtor é recusada com 400 antes de qualquer alteração.
 5. Cria `Sale` (`ABERTA`, com `shipping_amount` e `shipping_distance_km`), a primeira entrada do histórico de status, `SaleProduct` com o preço unitário congelado e `Payment`.
@@ -262,6 +263,10 @@ stateDiagram-v2
 - **Recusa** (`aceitar: false`): cancela o **pedido inteiro**, inclusive em pedido com mais de um vendedor, e devolve o estoque de todos os itens.
 - O cliente vê a proposta pendente em `pending_adjustment` no histórico de compras e no detalhe da compra. Pedido de outro cliente devolve 404, sem revelar que existe.
 - Não há prazo para o cliente responder.
+
+### Chat
+- As respostas de `/chats` e as mensagens trazem os participantes só com os campos públicos (VER-108): `customer` e `seller.user` com `id` e `name`, `seller` com `id`, `user_id` e `farm_name`, e `sender` com `id` e `name`. E-mail, CPF, telefone, CNPJ e senha nunca são enviados ao outro participante.
+- A seleção fica centralizada em `chatRepository.withParticipants()` e `messageRepository.withSender()`, no mesmo padrão de `addSelect` do `product.repository`. Não use `relations: { customer: true }`, `relations: { sender: true }` nem `leftJoinAndSelect` nos usuários do chat. O `tests/chat-privacy.test.ts` falha se alguma dessas chaves voltar a aparecer.
 
 ### Avaliações
 - Só o cliente dono da venda avalia, apenas vendas `FINALIZADA` e uma vez por venda.

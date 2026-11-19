@@ -203,3 +203,18 @@ export function formatFullAddress(
 
 	return data.address || null;
 }
+
+// Tamanho da coluna `users.address` (varchar 255)
+const LEGACY_ADDRESS_MAX_LENGTH = 255;
+
+/**
+ * Monta o texto do campo legado `address` exclusivamente a partir do endereço
+ * estruturado, que é a fonte de verdade desde a VER-63. Retorna null quando não há
+ * nenhum campo estruturado preenchido. O resultado é limitado ao tamanho da coluna.
+ */
+export function composeLegacyAddress(
+	data: Omit<NonNullable<Parameters<typeof formatFullAddress>[0]>, "address">,
+): string | null {
+	const composed = formatFullAddress({ ...data, address: null });
+	return composed ? composed.slice(0, LEGACY_ADDRESS_MAX_LENGTH) : null;
+}
