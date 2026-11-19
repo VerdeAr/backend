@@ -1,5 +1,10 @@
 import { AppError } from "@/errors/AppError";
 import { sellerRepository } from "@/repositories/seller.repository";
+import {
+	type DeliveryAddressSource,
+	getLegacyDeliveryAddress,
+	hasCompleteStructuredAddress,
+} from "@/schemas/address.schema";
 import type { CalculateRouteInput } from "@/schemas/shipping.schema";
 import {
 	type Coordinates,
@@ -27,15 +32,7 @@ export interface SellerShippingSource {
 	user?: { fixed_shipping_rate?: Decimal } | null;
 }
 
-export interface CustomerAddressSource {
-	zip_code?: string | null;
-	street?: string | null;
-	number?: string | null;
-	neighborhood_name?: string | null;
-	city?: string | null;
-	state?: string | null;
-	address?: string | null;
-}
+export type CustomerAddressSource = DeliveryAddressSource;
 
 export type ShippingPricingMode = "POR_KM" | "TAXA_FIXA";
 
@@ -111,18 +108,6 @@ export function usesDistancePricing(seller: SellerShippingSource): boolean {
 	return getSellerOrigin(seller) !== null;
 }
 
-export function hasCompleteStructuredAddress(
-	customer: CustomerAddressSource | null | undefined,
-): boolean {
-	return (
-		Boolean(customer?.zip_code) &&
-		Boolean(customer?.street) &&
-		Boolean(customer?.number) &&
-		Boolean(customer?.city) &&
-		Boolean(customer?.state)
-	);
-}
-
 export function outOfRadiusMessage(quote: SellerShippingQuote): string {
 	const sellerName = quote.farm_name ? `"${quote.farm_name}"` : "O produtor";
 	return (
@@ -135,8 +120,9 @@ export class ShippingService {
 	constructor(private readonly routing: RoutingService = routingService) {}
 
 	/**
-	 * Coordenadas do endereço do cliente: estruturado (VER-63) ou, para cadastros
-	 * antigos, o texto livre. Sem endereço, devolve null.
+	 * Coordenadas do endereço do cliente: estruturado completo (VER-63) ou, para
+	 * cadastros antigos sem nenhum campo estruturado, o texto livre. Segue a mesma
+	 * regra do checkout (RF-40): endereço parcial devolve null, sem chamar o ORS.
 	 */
 	async resolveCustomerDestination(
 		customer: CustomerAddressSource | null | undefined,
@@ -152,7 +138,7 @@ export class ShippingService {
 			});
 		}
 
-		const legacyAddress = customer?.address?.trim();
+		const legacyAddress = getLegacyDeliveryAddress(customer);
 		if (legacyAddress) {
 			return this.routing.geocodeText(legacyAddress);
 		}

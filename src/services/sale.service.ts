@@ -25,7 +25,10 @@ import {
 	sellerRepository,
 	userRepository,
 } from "@/repositories";
-import { formatFullAddress } from "@/schemas/address.schema";
+import {
+	formatFullAddress,
+	hasDeliveryAddress,
+} from "@/schemas/address.schema";
 import type {
 	CheckoutInput,
 	ProposeAdjustmentInput,
@@ -39,6 +42,10 @@ import {
 	type SellerShippingQuote,
 	shippingService,
 } from "@/services/shipping.service";
+
+// RF-40: mensagem única para Entrega sem endereço válido no perfil.
+const DELIVERY_ADDRESS_REQUIRED_MESSAGE =
+	"Para entrega no endereço, é obrigatório preencher o endereço completo (CEP, logradouro, número, cidade e UF) no perfil.";
 
 export interface FormattedSaleItem {
 	id: string;
@@ -170,6 +177,11 @@ export class SaleService {
 			item.product?.seller?.id ? [item.product.seller] : [],
 		);
 		const customer = await userRepository.findOne({ where: { id: userId } });
+		// RF-40 antes do frete: endereço inválido recebe o mesmo 400 do checkout,
+		// sem chamar o OpenRouteService com um endereço parcial.
+		if (!hasDeliveryAddress(customer)) {
+			throw new AppError(DELIVERY_ADDRESS_REQUIRED_MESSAGE, 400);
+		}
 		const quotes = await shippingService.quoteSellers(sellers, customer);
 
 		// Entrega fora do raio de algum produtor: recusa sem criar o pedido
@@ -238,30 +250,8 @@ export class SaleService {
 				const customer = await manager.findOne(User, {
 					where: { id: userId },
 				});
-				const hasStructuredAddress =
-					Boolean(customer?.zip_code) &&
-					Boolean(customer?.street) &&
-					Boolean(customer?.number) &&
-					Boolean(customer?.city) &&
-					Boolean(customer?.state);
-				const hasAnyStructuredField = [
-					customer?.zip_code,
-					customer?.street,
-					customer?.number,
-					customer?.complement,
-					customer?.neighborhood_name,
-					customer?.city,
-					customer?.state,
-				].some(Boolean);
-				const addressOk = hasAnyStructuredField
-					? hasStructuredAddress
-					: Boolean(customer?.address?.trim());
-
-				if (!addressOk) {
-					throw new AppError(
-						"Para entrega no endereço, é obrigatório preencher o endereço completo (CEP, logradouro, número, cidade e UF) no perfil.",
-						400,
-					);
+				if (!hasDeliveryAddress(customer)) {
+					throw new AppError(DELIVERY_ADDRESS_REQUIRED_MESSAGE, 400);
 				}
 			}
 

@@ -218,3 +218,65 @@ export function composeLegacyAddress(
 	const composed = formatFullAddress({ ...data, address: null });
 	return composed ? composed.slice(0, LEGACY_ADDRESS_MAX_LENGTH) : null;
 }
+
+/** Campos de endereço do usuário usados para decidir se a Entrega é possível. */
+export interface DeliveryAddressSource {
+	zip_code?: string | null;
+	street?: string | null;
+	number?: string | null;
+	complement?: string | null;
+	neighborhood_name?: string | null;
+	city?: string | null;
+	state?: string | null;
+	address?: string | null;
+}
+
+/** Endereço estruturado completo: CEP, logradouro, número, cidade e UF. */
+export function hasCompleteStructuredAddress(
+	source: DeliveryAddressSource | null | undefined,
+): boolean {
+	return (
+		Boolean(source?.zip_code) &&
+		Boolean(source?.street) &&
+		Boolean(source?.number) &&
+		Boolean(source?.city) &&
+		Boolean(source?.state)
+	);
+}
+
+/** Algum campo estruturado preenchido, mesmo que o endereço esteja incompleto. */
+export function hasAnyStructuredAddressField(
+	source: DeliveryAddressSource | null | undefined,
+): boolean {
+	return [
+		source?.zip_code,
+		source?.street,
+		source?.number,
+		source?.complement,
+		source?.neighborhood_name,
+		source?.city,
+		source?.state,
+	].some(Boolean);
+}
+
+/**
+ * Texto livre (`address`) aceito para a Entrega. Como ele é derivado dos campos
+ * estruturados desde a VER-63, só vale para cadastros anteriores que não têm nenhum
+ * campo estruturado; quem tem algum precisa do endereço estruturado completo.
+ */
+export function getLegacyDeliveryAddress(
+	source: DeliveryAddressSource | null | undefined,
+): string | null {
+	if (hasAnyStructuredAddressField(source)) return null;
+	return source?.address?.trim() || null;
+}
+
+/** Regra única da RF-40: o cliente tem endereço válido para a Entrega. */
+export function hasDeliveryAddress(
+	source: DeliveryAddressSource | null | undefined,
+): boolean {
+	return (
+		hasCompleteStructuredAddress(source) ||
+		getLegacyDeliveryAddress(source) !== null
+	);
+}
