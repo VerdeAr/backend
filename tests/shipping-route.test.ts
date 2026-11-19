@@ -409,4 +409,41 @@ describe("frete por km no carrinho e no checkout", () => {
 		expect(checkout.status).toBe(400);
 		expect(checkout.body.message).toContain("endereço completo");
 	});
+
+	it("endereço estruturado parcial não vai ao ORS: carrinho avisa e o checkout recusa", async () => {
+		// O `address` derivado ainda tem texto (rua, cidade, CEP), mas sem o número
+		// o endereço não vale para a Entrega e não pode ser geocodificado
+		const customer = await registerUser("CLIENTE", { address: "estruturado" });
+		const update = await customer.client
+			.put("/pessoa/cadastro")
+			.send({ number: null });
+		expect(update.status).toBe(200);
+		const product = await fillCart(customer, 10);
+		ors.calls = 0;
+
+		const cart = await customer.client.get("/carrinho");
+		const checkout = await customer.client.post("/vendas/checkout").send({});
+		const purchases = await customer.client.get("/vendas/minhas-compras");
+
+		expect(cart.status).toBe(200);
+		expect(cart.body.shipping_status).toBe("SEM_ENDERECO");
+		expect(checkout.status).toBe(400);
+		expect(checkout.body.message).toContain("endereço completo");
+		expect(ors.calls).toBe(0);
+		expect(purchases.body).toHaveLength(0);
+		expect(await getStock(product.id)).toBe(10);
+	});
+
+	it("cliente antigo só com o texto livre continua com frete por km", async () => {
+		const customer = await registerUser("CLIENTE", { address: "legado" });
+		await fillCart(customer);
+
+		const cart = await customer.client.get("/carrinho");
+		const checkout = await customer.client.post("/vendas/checkout").send({});
+
+		expect(cart.body.shipping_status).toBe("OK");
+		expect(cart.body.shipping).toBe(15);
+		expect(checkout.status).toBe(201);
+		expect(Number(checkout.body.shipping_amount)).toBe(15);
+	});
 });
