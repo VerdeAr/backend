@@ -2,6 +2,7 @@ import process from "node:process";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { AppDataSource } from "@/config/database";
+import { welcomeEmail } from "@/emails/templates/welcome";
 import { Seller } from "@/entities/Seller";
 import { AppError } from "@/errors/AppError";
 import { userRepository } from "@/repositories/user.repository";
@@ -10,6 +11,7 @@ import {
 	extractStructuredAddress,
 } from "@/schemas/address.schema";
 import type { LoginInput, RegisterInput } from "@/schemas/auth.schema";
+import { emailService } from "@/services/email.service";
 
 export class AuthService {
 	async register(data: RegisterInput) {
@@ -81,6 +83,14 @@ export class AuthService {
 		const token = jwt.sign({ id: user.id, role: user.role }, secret, {
 			expiresIn: "7d",
 		});
+
+		// Boas-vindas (RF-44) só depois de o cadastro estar gravado; falhas no envio
+		// ficam no log e não afetam a resposta do cadastro
+		emailService.dispatch(
+			"boas-vindas",
+			{ to: user.email, ...welcomeEmail({ name: user.name, role: user.role }) },
+			{ userId: user.id },
+		);
 
 		return {
 			token,
