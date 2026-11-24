@@ -2,6 +2,7 @@ import type { EntityManager } from "typeorm";
 import { AppDataSource } from "@/config/database";
 import type { OrderEmailItem } from "@/emails/order-parts";
 import { orderConfirmationEmail } from "@/emails/templates/order-confirmation";
+import { orderStatusEmail } from "@/emails/templates/order-status";
 import { sellerNewOrderEmail } from "@/emails/templates/seller-new-order";
 import {
 	Cart,
@@ -981,7 +982,8 @@ export class SaleService {
 			throw new AppError("Perfil de vendedor não encontrado.", 404);
 		}
 
-		await AppDataSource.transaction(async (manager) => {
+		// Devolve o pedido alterado, ou null quando ele já estava no status solicitado (nada muda)
+		const changedSale = await AppDataSource.transaction(async (manager) => {
 			const sale = await this.lockSale(manager, saleId);
 			if (!sale) {
 				throw new AppError("Pedido não encontrado.", 404);
@@ -1006,7 +1008,7 @@ export class SaleService {
 
 			// Validações de máquina de estados
 			if (sale.status === newStatus) {
-				return;
+				return null;
 			}
 
 			if (sale.status === SaleStatus.CANCELADA) {
@@ -1051,7 +1053,13 @@ export class SaleService {
 			sale.status = newStatus;
 			await manager.save(sale);
 			await this.recordStatusChange(manager, sale.id, newStatus, sellerUserId);
+			return sale;
 		});
+
+		// Avisa o cliente só quando o status mudou de fato (RF-57), após o commit
+		if (changedSale) {
+			void this.notifyStatusChange(changedSale);
+		}
 
 		// Retorna o pedido atualizado com a perspectiva do vendedor
 		const updatedOrders = await this.getSellerOrders(sellerUserId);
@@ -1060,6 +1068,38 @@ export class SaleService {
 			throw new AppError("Pedido não encontrado após atualização.", 404);
 		}
 		return targetOrder;
+	}
+
+	/**
+	 * E-mail ao cliente com o novo status do pedido. Nunca lança erro: a mudança de
+	 * status já está gravada quando este método roda.
+	 */
+	private async notifyStatusChange(sale: Sale): Promise<void> {
+		try {
+			const [customer] = await userRepository.findEmailContactsByIds([
+				sale.customer_id,
+			]);
+			if (!customer?.email) return;
+
+			emailService.dispatch(
+				"status-pedido",
+				{
+					to: customer.email,
+					...orderStatusEmail({
+						customerName: customer.name,
+						saleId: sale.id,
+						status: sale.status,
+						deliveryType: sale.delivery_type,
+					}),
+				},
+				{ saleId: sale.id, status: sale.status },
+			);
+		} catch (error) {
+			console.error(
+				`[Resend] Falha ao preparar o e-mail de status (saleId=${sale.id}):`,
+				error instanceof Error ? error.message : error,
+			);
+		}
 	}
 
 	/**
