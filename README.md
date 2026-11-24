@@ -81,6 +81,9 @@ Documentação interativa:
 | `DB_NAME` | Nome do banco | `verdear` |
 | `JWT_SECRET` | Segredo de assinatura dos tokens | `default_secret` |
 | `CORS_ORIGIN` | Origens permitidas, separadas por vírgula | `http://localhost:5173` |
+| `RESEND_API_KEY` | Chave do Resend para os e-mails transacionais (VER-83). Vazia: nenhum e-mail é enviado e a API segue normal | vazia |
+| `EMAIL_FROM` | Remetente dos e-mails; precisa ser de um domínio verificado no Resend | `VerdeAr <onboarding@resend.dev>` |
+| `APP_URL` | Opcional. Endereço do frontend usado nos botões dos e-mails (ex.: `https://app.seudominio.com`); sem ela, os e-mails saem sem botão | não definida |
 
 > Nunca comite o `.env`. Troque `JWT_SECRET` em qualquer ambiente que não seja local.
 

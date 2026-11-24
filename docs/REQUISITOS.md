@@ -86,7 +86,7 @@ Requisitos do produto, com o estado de cada um. O VerdeAr é um marketplace que 
 | RF-41 | O checkout cria o pedido com status `ABERTA`, grava o preço unitário de cada item e baixa o estoque em uma única transação (tudo ou nada). | B | Implementado | VER-41 |
 | RF-42 | Ao confirmar, o carrinho é esvaziado e o cliente vê a tela de confirmação com as instruções de pagamento. | B, F | Implementado | VER-41 |
 | RF-43 | O cliente consulta o histórico de compras e o detalhe de cada uma, vendo apenas as próprias. | B, F | Implementado | VER-41 |
-| RF-44 | A plataforma envia e-mail de boas-vindas ao novo usuário e e-mail de confirmação de pedido ao comprador, com resumo e instruções de entrega ou retirada. | B | Planejado | VER-82 |
+| RF-44 | A plataforma envia e-mail de boas-vindas ao novo usuário e e-mail de confirmação de pedido ao comprador, com resumo e instruções de entrega ou retirada. | B | Implementado (backend; avisos visuais na VER-84) | VER-82, VER-83 |
 
 ### 2.6 Pedidos do vendedor
 
@@ -99,7 +99,7 @@ Requisitos do produto, com o estado de cada um. O VerdeAr é um marketplace que 
 | RF-54 | O Vendedor tem página de detalhe do pedido (`/vendedor/pedidos/:id`) com linha do tempo, dados do cliente e rota de entrega. | B, F | Parcial (API `GET /vendedor/pedidos/:id` pronta; tela na VER-96) | VER-95, VER-96 |
 | RF-55 | O workflow do pedido ganha as etapas Recebido (`ABERTA`), Em Preparação, A Caminho (só Entrega) e Concluído (`FINALIZADA`). | B, F | Parcial (backend pronto; tela na VER-96) | VER-95, VER-96 |
 | RF-56 | O Vendedor propõe ajuste de quantidade ou pesagem, e o cliente aprova ou recusa por um banner no histórico; não há alteração unilateral. Aceitar atualiza quantidades, total, pagamento e estoque; recusar cancela o pedido. | B, F | Parcial (API de proposta e resposta pronta; telas na VER-96) | VER-95, VER-96 |
-| RF-57 | O Vendedor recebe e-mail de novo pedido e o cliente recebe e-mail a cada atualização de status. | B | Planejado | VER-82 |
+| RF-57 | O Vendedor recebe e-mail de novo pedido e o cliente recebe e-mail a cada atualização de status. | B | Implementado (backend; avisos visuais na VER-84) | VER-82, VER-83 |
 
 ### 2.7 Avaliações
 
