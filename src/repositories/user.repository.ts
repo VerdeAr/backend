@@ -29,4 +29,16 @@ export const userRepository = AppDataSource.getRepository(User).extend({
 			.where("user.id = :id", { id })
 			.getOne();
 	},
+
+	/**
+	 * Nome e e-mail de vários usuários, para os e-mails transacionais (VER-83).
+	 * Carrega só esses campos, sem dados sensíveis.
+	 */
+	findEmailContactsByIds(ids: string[]) {
+		if (ids.length === 0) return Promise.resolve([]);
+		return this.createQueryBuilder("user")
+			.select(["user.id", "user.name", "user.email"])
+			.where("user.id IN (:...ids)", { ids })
+			.getMany();
+	},
 });
