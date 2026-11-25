@@ -41,6 +41,7 @@ Modelado, mas **sem endpoints** hoje: `Shipping` (frete por bairro). A comunica�
 | Git hooks | Husky + Commitlint (`@commitlint/config-conventional`) |
 | Container | Docker multi-stage (`builder` e `runner`), com `HEALTHCHECK` em `/ready` |
 | CI/CD | GitHub Actions, imagem no GHCR e Dependabot. Ver [CICD.md](CICD.md) |
+| E-mail | SDK `resend` (e-mails transacionais, VER-83) |
 | Configuração | `dotenv` |
 
 ---
@@ -53,6 +54,7 @@ flowchart LR
     F -- "HTTP/JSON<br/>cookie HTTP-Only (JWT)" --> A[Backend<br/>Express 5]
     A -- "TypeORM" --> D[(PostgreSQL)]
     A -. "/docs" .-> S[Swagger UI]
+    A -. "e-mails transacionais" .-> R[Resend]
 ```
 
 O backend é um serviço único e sem estado de sessão no servidor. A identidade vem do JWT enviado em cada requisição.
@@ -67,6 +69,7 @@ src/
 ├── server.ts          # Inicializa o DataSource e sobe o servidor na PORT
 ├── config/            # database.ts (DataSource TypeORM) e swagger.ts (OpenAPI)
 ├── controllers/       # Recebem a requisição, validam com Zod e delegam aos services
+├── emails/            # Layout base, partes de pedido e templates dos e-mails transacionais
 ├── entities/          # Entidades TypeORM, enums.ts e index.ts
 ├── errors/            # AppError (mensagem, status HTTP e lista de erros)
 ├── middlewares/       # auth, validation, logging e error
@@ -219,6 +222,7 @@ Executado em uma única transação (`SaleService.checkout`):
 4. Calcula subtotal, frete por produtor e total. O frete é calculado no servidor **antes** de abrir a transação, para a chamada ao OpenRouteService não segurar os bloqueios de estoque; dentro da transação, se o carrinho tiver mudado de produtores, a operação é recusada com 409. Entrega fora do raio de algum produtor é recusada com 400 antes de qualquer alteração.
 5. Cria `Sale` (`ABERTA`, com `shipping_amount` e `shipping_distance_km`), a primeira entrada do histórico de status, `SaleProduct` com o preço unitário congelado e `Payment`.
 6. Esvazia o carrinho. Qualquer falha desfaz tudo.
+7. Depois do commit, dispara os e-mails de confirmação ao comprador e de novo pedido a cada produtor (ver *E-mails transacionais*).
 
 ### Pedidos
 - O vendedor vê apenas pedidos que contêm produtos seus, com o subtotal da sua parte e o total do pedido. A lista indica `has_pending_adjustment`.
@@ -263,6 +267,25 @@ stateDiagram-v2
 - **Recusa** (`aceitar: false`): cancela o **pedido inteiro**, inclusive em pedido com mais de um vendedor, e devolve o estoque de todos os itens.
 - O cliente vê a proposta pendente em `pending_adjustment` no histórico de compras e no detalhe da compra. Pedido de outro cliente devolve 404, sem revelar que existe.
 - Não há prazo para o cliente responder.
+
+### E-mails transacionais
+
+Enviados pelo SDK do Resend a partir de `src/services/email.service.ts` (VER-83), com os templates em `src/emails/`:
+
+| Evento | Destinatário | Onde dispara |
+|---|---|---|
+| Boas-vindas | Novo usuário | `AuthService.register` |
+| Confirmação de pedido (itens, valores, pagamento e instruções de entrega ou retirada) | Comprador | `SaleService.checkout` |
+| Novo pedido, só com os itens do produtor e o subtotal dele | Cada produtor do pedido | `SaleService.checkout` |
+| Atualização de status | Comprador | `SaleService.updateSaleStatus`, só quando o status muda, e `SaleService.proposeAdjustment` ("Aguardando sua aprovação") |
+
+- **Efeito colateral, nunca bloqueante:** o envio ocorre depois do commit da transação e sem esperar o Resend. O `send` não lança erro; falhas da API ou de rede vão para o log como `[Resend] Falha ao enviar o e-mail "<evento>" (saleId=...)`, com os IDs e sem o endereço do destinatário. O cadastro, o checkout e a mudança de status respondem normalmente.
+- **Fila de envio:** `dispatch` coloca os e-mails em uma fila única do processo, que envia um por vez com `EMAIL_SEND_INTERVAL_MS` (padrão 500 ms, até 2 por segundo) entre eles. Assim um checkout com vários produtores, ou vários checkouts ao mesmo tempo, não estouram o limite por segundo do Resend. Uma falha não trava a fila.
+- **Sem `RESEND_API_KEY`** (desenvolvimento, testes e CI), nada é enviado; a API registra um aviso uma única vez. Isso também preserva a cota gratuita (RNF-23).
+- Os dados do usuário são escapados no HTML (`escapeHtml`). Cada e-mail tem versão HTML (tabelas e CSS inline, até 600 px) e texto puro.
+- Na Retirada, o comprador recebe o nome da fazenda e o telefone de cada produtor, sem o endereço de origem. O e-mail do produtor é buscado à parte (`userRepository.findEmailContactsByIds`) e não entra na resposta do checkout.
+- `EMAIL_FROM` define o remetente (domínio verificado no Resend) e `APP_URL`, opcional, os links dos botões. A resposta do próprio cliente à proposta de ajuste (`respondAdjustment`) não gera e-mail: só as mudanças feitas pelo vendedor avisam o cliente.
+- **Limite no cadastro:** `POST /auth/register` aceita até `REGISTER_RATE_LIMIT` cadastros por hora por IP (padrão 10) e responde 429 acima disso, para que o cadastro não sirva para disparar boas-vindas a e-mails de terceiros. Atrás de proxy reverso, `TRUST_PROXY` (ex.: `1`) faz o `req.ip` ser o IP do visitante; sem ela, todos os acessos contam no IP do proxy.
 
 ### Chat
 - As respostas de `/chats` e as mensagens trazem os participantes só com os campos públicos (VER-108): `customer` e `seller.user` com `id` e `name`, `seller` com `id`, `user_id` e `farm_name`, e `sender` com `id` e `name`. E-mail, CPF, telefone, CNPJ e senha nunca são enviados ao outro participante.

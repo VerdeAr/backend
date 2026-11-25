@@ -1,5 +1,9 @@
 import type { EntityManager } from "typeorm";
 import { AppDataSource } from "@/config/database";
+import type { OrderEmailItem } from "@/emails/order-parts";
+import { orderConfirmationEmail } from "@/emails/templates/order-confirmation";
+import { orderStatusEmail } from "@/emails/templates/order-status";
+import { sellerNewOrderEmail } from "@/emails/templates/seller-new-order";
 import {
 	Cart,
 	CartItem,
@@ -14,6 +18,7 @@ import {
 	SaleProduct,
 	SaleStatus,
 	SaleStatusHistory,
+	type Seller,
 	User,
 } from "@/entities";
 import { AppError, type ValidationErrorDetail } from "@/errors/AppError";
@@ -33,6 +38,7 @@ import type {
 	CheckoutInput,
 	ProposeAdjustmentInput,
 } from "@/schemas/sale.schema";
+import { emailService } from "@/services/email.service";
 import {
 	ADJUSTABLE_STATUSES,
 	canSellerTransition,
@@ -42,6 +48,22 @@ import {
 	type SellerShippingQuote,
 	shippingService,
 } from "@/services/shipping.service";
+
+// Item do pedido no formato dos templates de e-mail (preço congelado na compra)
+function toOrderEmailItem(item: SaleProduct): OrderEmailItem {
+	const unitPrice = Number(item.unit_price);
+	const quantity = Number(item.quantity);
+	return {
+		name: item.product?.name || "Produto",
+		quantity,
+		unit:
+			item.product?.measurement_unit?.symbol ||
+			item.product?.measurement_unit?.name ||
+			null,
+		unitPrice,
+		total: Number((unitPrice * quantity).toFixed(2)),
+	};
+}
 
 // RF-40: mensagem única para Entrega sem endereço válido no perfil.
 const DELIVERY_ADDRESS_REQUIRED_MESSAGE =
@@ -419,7 +441,108 @@ export class SaleService {
 			.where("sale.id = :id", { id: saleId })
 			.getOne();
 
+		// 11. E-mails do pedido (RF-44 e RF-57), já com a transação confirmada e sem
+		// atrasar a resposta: qualquer falha fica no log e o pedido segue criado
+		void this.notifyCheckout(createdSale!);
+
 		return createdSale!;
+	}
+
+	/**
+	 * Envia a confirmação ao comprador e um alerta a cada produtor do pedido, só com os
+	 * itens dele. Nunca lança erro: o pedido já está gravado quando este método roda.
+	 */
+	private async notifyCheckout(sale: Sale): Promise<void> {
+		try {
+			const items = sale.items || [];
+			const isDelivery = sale.delivery_type === DeliveryType.ENTREGA;
+			const deliveryAddress = isDelivery
+				? formatFullAddress(sale.customer)
+				: null;
+			const shipping = Number(sale.shipping_amount ?? 0);
+			const total = Number(sale.total_amount);
+
+			// Itens agrupados por produtor, na ordem em que aparecem no pedido
+			const sellerGroups = new Map<
+				string,
+				{ seller: Seller; items: SaleProduct[] }
+			>();
+			for (const item of items) {
+				const seller = item.product?.seller;
+				if (!seller) continue;
+				const group = sellerGroups.get(seller.id);
+				if (group) {
+					group.items.push(item);
+				} else {
+					sellerGroups.set(seller.id, { seller, items: [item] });
+				}
+			}
+
+			emailService.dispatch(
+				"confirmacao-pedido",
+				{
+					to: sale.customer.email,
+					...orderConfirmationEmail({
+						customerName: sale.customer.name,
+						saleId: sale.id,
+						deliveryType: sale.delivery_type,
+						items: items.map(toOrderEmailItem),
+						subtotal: Number((total - shipping).toFixed(2)),
+						shipping,
+						total,
+						paymentMethod:
+							sale.payments?.[0]?.payment_method?.description || null,
+						deliveryAddress,
+						sellers: [...sellerGroups.values()].map(({ seller }) => ({
+							name: seller.user?.name || "Produtor",
+							farmName: seller.farm_name,
+							phone: seller.user?.phone || null,
+						})),
+					}),
+				},
+				{ saleId: sale.id },
+			);
+
+			// O e-mail do produtor não vem na consulta do pedido, que o comprador recebe
+			const sellerContacts = await userRepository.findEmailContactsByIds(
+				[...sellerGroups.values()].map(({ seller }) => seller.user_id),
+			);
+
+			for (const { seller, items: sellerItems } of sellerGroups.values()) {
+				const contact = sellerContacts.find(
+					(user) => user.id === seller.user_id,
+				);
+				if (!contact?.email) continue;
+
+				const emailItems = sellerItems.map(toOrderEmailItem);
+				emailService.dispatch(
+					"novo-pedido-produtor",
+					{
+						to: contact.email,
+						...sellerNewOrderEmail({
+							sellerName: contact.name,
+							saleId: sale.id,
+							deliveryType: sale.delivery_type,
+							customerName: sale.customer.name,
+							customerPhone: sale.customer.phone || null,
+							deliveryAddress,
+							items: emailItems,
+							sellerSubtotal: Number(
+								emailItems
+									.reduce((sum, item) => sum + item.total, 0)
+									.toFixed(2),
+							),
+						}),
+					},
+					{ saleId: sale.id, sellerId: seller.id },
+				);
+			}
+		} catch (error) {
+			console.error(
+				`[Resend] Falha ao preparar os e-mails do pedido (saleId=${sale.id}):`,
+				error instanceof Error ? error.message : error,
+			);
+		}
 	}
 
 	/**
@@ -566,7 +689,7 @@ export class SaleService {
 			throw new AppError("Perfil de vendedor não encontrado.", 404);
 		}
 
-		await AppDataSource.transaction(async (manager) => {
+		const adjustedSale = await AppDataSource.transaction(async (manager) => {
 			const sale = await this.lockSale(manager, saleId);
 			if (!sale) {
 				throw new AppError("Pedido não encontrado.", 404);
@@ -678,7 +801,11 @@ export class SaleService {
 				SaleStatus.AGUARDANDO_APROVACAO_CLIENTE,
 				sellerUserId,
 			);
+			return sale;
 		});
+
+		// O cliente é avisado de que há uma proposta aguardando a resposta dele (RF-57)
+		void this.notifyStatusChange(adjustedSale);
 
 		return this.getSellerOrderDetail(sellerUserId, saleId);
 	}
@@ -859,7 +986,8 @@ export class SaleService {
 			throw new AppError("Perfil de vendedor não encontrado.", 404);
 		}
 
-		await AppDataSource.transaction(async (manager) => {
+		// Devolve o pedido alterado, ou null quando ele já estava no status solicitado (nada muda)
+		const changedSale = await AppDataSource.transaction(async (manager) => {
 			const sale = await this.lockSale(manager, saleId);
 			if (!sale) {
 				throw new AppError("Pedido não encontrado.", 404);
@@ -884,7 +1012,7 @@ export class SaleService {
 
 			// Validações de máquina de estados
 			if (sale.status === newStatus) {
-				return;
+				return null;
 			}
 
 			if (sale.status === SaleStatus.CANCELADA) {
@@ -929,7 +1057,13 @@ export class SaleService {
 			sale.status = newStatus;
 			await manager.save(sale);
 			await this.recordStatusChange(manager, sale.id, newStatus, sellerUserId);
+			return sale;
 		});
+
+		// Avisa o cliente só quando o status mudou de fato (RF-57), após o commit
+		if (changedSale) {
+			void this.notifyStatusChange(changedSale);
+		}
 
 		// Retorna o pedido atualizado com a perspectiva do vendedor
 		const updatedOrders = await this.getSellerOrders(sellerUserId);
@@ -938,6 +1072,40 @@ export class SaleService {
 			throw new AppError("Pedido não encontrado após atualização.", 404);
 		}
 		return targetOrder;
+	}
+
+	/**
+	 * E-mail ao cliente com o novo status do pedido. Nunca lança erro: a mudança de
+	 * status já está gravada quando este método roda.
+	 * Só é chamado nas mudanças feitas pelo vendedor (status e proposta de ajuste); a
+	 * resposta do próprio cliente à proposta (`respondAdjustment`) não gera e-mail.
+	 */
+	private async notifyStatusChange(sale: Sale): Promise<void> {
+		try {
+			const [customer] = await userRepository.findEmailContactsByIds([
+				sale.customer_id,
+			]);
+			if (!customer?.email) return;
+
+			emailService.dispatch(
+				"status-pedido",
+				{
+					to: customer.email,
+					...orderStatusEmail({
+						customerName: customer.name,
+						saleId: sale.id,
+						status: sale.status,
+						deliveryType: sale.delivery_type,
+					}),
+				},
+				{ saleId: sale.id, status: sale.status },
+			);
+		} catch (error) {
+			console.error(
+				`[Resend] Falha ao preparar o e-mail de status (saleId=${sale.id}):`,
+				error instanceof Error ? error.message : error,
+			);
+		}
 	}
 
 	/**
