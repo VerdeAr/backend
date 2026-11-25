@@ -4,6 +4,23 @@ import { Resend } from "resend";
 // Remetente usado quando EMAIL_FROM não está definido (domínio de testes do Resend)
 const DEFAULT_FROM = "VerdeAr <onboarding@resend.dev>";
 
+// Intervalo mínimo entre envios: 500 ms mantém até 2 e-mails por segundo, dentro do
+// limite de requisições por segundo do Resend mesmo com vários checkouts ao mesmo tempo
+const DEFAULT_SEND_INTERVAL_MS = 500;
+
+function sendIntervalMs(): number {
+	const raw = process.env.EMAIL_SEND_INTERVAL_MS;
+	if (raw === undefined || raw.trim() === "") return DEFAULT_SEND_INTERVAL_MS;
+	const value = Number(raw);
+	return Number.isFinite(value) && value >= 0
+		? value
+		: DEFAULT_SEND_INTERVAL_MS;
+}
+
+function delay(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // Eventos transacionais cobertos pela VER-82, usados para identificar o envio no log
 export type EmailEvent =
 	| "boas-vindas"
@@ -47,11 +64,16 @@ function logEmailFailure(
  *
  * Sem RESEND_API_KEY (desenvolvimento, testes e CI), nenhum e-mail é enviado, o que também
  * preserva a cota gratuita do Resend (RNF-23).
+ *
+ * Os envios de `dispatch` passam por uma fila única do processo: saem um de cada vez, com
+ * EMAIL_SEND_INTERVAL_MS entre eles, para não estourar o limite por segundo do Resend.
  */
 export class EmailService {
 	private client: Resend | null = null;
 	private clientKey: string | null = null;
 	private warnedMissingKey = false;
+	private queue: Promise<void> = Promise.resolve();
+	private lastSentAt = 0;
 
 	// A chave é lida a cada envio, para refletir o ambiente atual (inclusive nos testes)
 	private getClient(): Resend | null {
@@ -113,7 +135,7 @@ export class EmailService {
 	}
 
 	/**
-	 * Dispara o envio em segundo plano, sem atrasar a resposta da requisição.
+	 * Coloca o envio na fila, sem atrasar a resposta da requisição.
 	 * Deve ser chamado só depois que a transação do banco foi confirmada.
 	 */
 	dispatch(
@@ -121,7 +143,38 @@ export class EmailService {
 		message: EmailMessage,
 		context: EmailLogContext = {},
 	): void {
-		void this.send(event, message, context);
+		this.queue = this.queue
+			.then(() => this.sendInOrder(event, message, context))
+			.catch((error: unknown) => {
+				// `send` não lança erro; isto só protege a fila de uma falha inesperada
+				logEmailFailure(
+					event,
+					context,
+					error instanceof Error ? error.message : "erro inesperado na fila",
+				);
+			});
+	}
+
+	// Resolve quando todos os e-mails colocados na fila até agora foram processados
+	idle(): Promise<void> {
+		return this.queue;
+	}
+
+	private async sendInOrder(
+		event: EmailEvent,
+		message: EmailMessage,
+		context: EmailLogContext,
+	): Promise<void> {
+		// Sem chave nada sai para o Resend, então não há por que esperar o intervalo
+		const willCallResend = Boolean(process.env.RESEND_API_KEY);
+		if (willCallResend) {
+			const wait = this.lastSentAt + sendIntervalMs() - Date.now();
+			if (wait > 0) await delay(wait);
+		}
+
+		await this.send(event, message, context);
+
+		if (willCallResend) this.lastSentAt = Date.now();
 	}
 }
 

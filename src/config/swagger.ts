@@ -1793,6 +1793,20 @@ export const swaggerDoc = {
 							},
 						},
 					},
+					429: {
+						description:
+							"Limite de cadastros por IP excedido (padrão: 10 por hora, `REGISTER_RATE_LIMIT`). O cabeçalho `Retry-After` informa os segundos até liberar.",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+								example: {
+									success: false,
+									message:
+										"Muitos cadastros feitos a partir desta rede. Aguarde e tente novamente mais tarde.",
+								},
+							},
+						},
+					},
 				},
 			},
 		},

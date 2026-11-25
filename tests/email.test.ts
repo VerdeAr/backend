@@ -285,6 +285,45 @@ describe("EmailService", () => {
 		await expect(service.send("status-pedido", message)).resolves.toBe(false);
 		expect(String(errorSpy.mock.calls[0]?.[0])).toContain("fetch failed");
 	});
+
+	it("a fila envia um e-mail por vez, respeitando o intervalo mínimo", async () => {
+		process.env.EMAIL_SEND_INTERVAL_MS = "150";
+		let inFlight = 0;
+		let maxInFlight = 0;
+		const startedAt: number[] = [];
+		sendMock.mockImplementation(async () => {
+			inFlight += 1;
+			maxInFlight = Math.max(maxInFlight, inFlight);
+			startedAt.push(Date.now());
+			await settle(20);
+			inFlight -= 1;
+			return { data: { id: "email-simulado" }, error: null };
+		});
+		// A primeira falha não pode travar os envios seguintes
+		sendMock.mockRejectedValueOnce(new Error("falha pontual"));
+
+		try {
+			const service = new EmailService();
+			for (let index = 0; index < 4; index += 1) {
+				service.dispatch("confirmacao-pedido", message, {
+					saleId: `s${index}`,
+				});
+			}
+			await service.idle();
+
+			expect(sendMock).toHaveBeenCalledTimes(4);
+			expect(maxInFlight).toBe(1);
+			// Os 3 envios após a falha aguardam o intervalo (com folga para o timer)
+			expect(startedAt).toHaveLength(3);
+			for (let index = 1; index < startedAt.length; index += 1) {
+				expect(startedAt[index] - startedAt[index - 1]).toBeGreaterThanOrEqual(
+					140,
+				);
+			}
+		} finally {
+			delete process.env.EMAIL_SEND_INTERVAL_MS;
+		}
+	});
 });
 
 describe("disparos nos fluxos da API", () => {
@@ -374,6 +413,48 @@ describe("disparos nos fluxos da API", () => {
 			`Pedido #${orderNumber}: Em preparação`,
 			`Pedido #${orderNumber}: Concluído`,
 		]);
+	});
+
+	it("a proposta de ajuste avisa o cliente, mas a resposta dele não gera e-mail", async () => {
+		const saleId = await placeOrder(
+			customer.client,
+			[{ productId: productA.id, quantity: 2 }],
+			"RETIRADA",
+		);
+		const orderNumber = saleId.slice(0, 8).toUpperCase();
+		const statusEmails = () =>
+			sentTo(customer.user.email).filter((email) =>
+				email.subject.startsWith(`Pedido #${orderNumber}:`),
+			);
+
+		const detail = await sellerA.client.get(`/vendedor/pedidos/${saleId}`);
+		const proposal = await sellerA.client
+			.post(`/vendedor/pedidos/${saleId}/propor-ajuste`)
+			.send({
+				reason: "A pesagem ficou abaixo do pedido",
+				items: [{ sale_product_id: detail.body.items[0].id, quantity: 1 }],
+			});
+		expect(proposal.status).toBe(201);
+
+		await waitForEmails(() => statusEmails().length === 1);
+		expect(statusEmails()[0].subject).toBe(
+			`Pedido #${orderNumber}: Aguardando sua aprovação`,
+		);
+		expect(statusEmails()[0].text).toContain("aprovar ou recusar");
+
+		const answer = await customer.client
+			.post(`/vendas/${saleId}/responder-ajuste`)
+			.send({ aceitar: false });
+		expect(answer.status).toBe(200);
+
+		await settle(1_000);
+		expect(statusEmails()).toHaveLength(1);
+		// O produtor também não recebe e-mail pela resposta do cliente
+		expect(
+			sentTo(sellerA.user.email).filter((email) =>
+				email.subject.startsWith(`Pedido #${orderNumber}:`),
+			),
+		).toHaveLength(0);
 	});
 
 	it("uma falha do Resend não impede o checkout nem a mudança de status", async () => {

@@ -9,6 +9,14 @@ import { router } from "@/routes/index";
 
 const app = express();
 
+// Atrás de proxy reverso (Coolify/Traefik), TRUST_PROXY informa quantos proxies confiar
+// (ex.: 1) para que req.ip seja o IP do visitante e os limites por IP não somem todos
+// os acessos no IP do proxy. Desligado por padrão, como no acesso direto local.
+const trustProxyHops = Number(process.env.TRUST_PROXY);
+if (Number.isInteger(trustProxyHops) && trustProxyHops > 0) {
+	app.set("trust proxy", trustProxyHops);
+}
+
 // Origens permitidas: variável de ambiente CORS_ORIGIN (separadas por vírgula)
 // ou fallback para localhost em desenvolvimento
 const allowedOrigins: string[] = process.env.CORS_ORIGIN

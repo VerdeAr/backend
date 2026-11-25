@@ -277,13 +277,15 @@ Enviados pelo SDK do Resend a partir de `src/services/email.service.ts` (VER-83)
 | Boas-vindas | Novo usuário | `AuthService.register` |
 | Confirmação de pedido (itens, valores, pagamento e instruções de entrega ou retirada) | Comprador | `SaleService.checkout` |
 | Novo pedido, só com os itens do produtor e o subtotal dele | Cada produtor do pedido | `SaleService.checkout` |
-| Atualização de status | Comprador | `SaleService.updateSaleStatus`, só quando o status muda |
+| Atualização de status | Comprador | `SaleService.updateSaleStatus`, só quando o status muda, e `SaleService.proposeAdjustment` ("Aguardando sua aprovação") |
 
 - **Efeito colateral, nunca bloqueante:** o envio ocorre depois do commit da transação e sem esperar o Resend. O `send` não lança erro; falhas da API ou de rede vão para o log como `[Resend] Falha ao enviar o e-mail "<evento>" (saleId=...)`, com os IDs e sem o endereço do destinatário. O cadastro, o checkout e a mudança de status respondem normalmente.
+- **Fila de envio:** `dispatch` coloca os e-mails em uma fila única do processo, que envia um por vez com `EMAIL_SEND_INTERVAL_MS` (padrão 500 ms, até 2 por segundo) entre eles. Assim um checkout com vários produtores, ou vários checkouts ao mesmo tempo, não estouram o limite por segundo do Resend. Uma falha não trava a fila.
 - **Sem `RESEND_API_KEY`** (desenvolvimento, testes e CI), nada é enviado; a API registra um aviso uma única vez. Isso também preserva a cota gratuita (RNF-23).
 - Os dados do usuário são escapados no HTML (`escapeHtml`). Cada e-mail tem versão HTML (tabelas e CSS inline, até 600 px) e texto puro.
 - Na Retirada, o comprador recebe o nome da fazenda e o telefone de cada produtor, sem o endereço de origem. O e-mail do produtor é buscado à parte (`userRepository.findEmailContactsByIds`) e não entra na resposta do checkout.
-- `EMAIL_FROM` define o remetente (domínio verificado no Resend) e `APP_URL`, opcional, os links dos botões. A proposta de ajuste e a resposta do cliente a ela não geram e-mail.
+- `EMAIL_FROM` define o remetente (domínio verificado no Resend) e `APP_URL`, opcional, os links dos botões. A resposta do próprio cliente à proposta de ajuste (`respondAdjustment`) não gera e-mail: só as mudanças feitas pelo vendedor avisam o cliente.
+- **Limite no cadastro:** `POST /auth/register` aceita até `REGISTER_RATE_LIMIT` cadastros por hora por IP (padrão 10) e responde 429 acima disso, para que o cadastro não sirva para disparar boas-vindas a e-mails de terceiros. Atrás de proxy reverso, `TRUST_PROXY` (ex.: `1`) faz o `req.ip` ser o IP do visitante; sem ela, todos os acessos contam no IP do proxy.
 
 ### Chat
 - As respostas de `/chats` e as mensagens trazem os participantes só com os campos públicos (VER-108): `customer` e `seller.user` com `id` e `name`, `seller` com `id`, `user_id` e `farm_name`, e `sender` com `id` e `name`. E-mail, CPF, telefone, CNPJ e senha nunca são enviados ao outro participante.

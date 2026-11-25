@@ -689,7 +689,7 @@ export class SaleService {
 			throw new AppError("Perfil de vendedor não encontrado.", 404);
 		}
 
-		await AppDataSource.transaction(async (manager) => {
+		const adjustedSale = await AppDataSource.transaction(async (manager) => {
 			const sale = await this.lockSale(manager, saleId);
 			if (!sale) {
 				throw new AppError("Pedido não encontrado.", 404);
@@ -801,7 +801,11 @@ export class SaleService {
 				SaleStatus.AGUARDANDO_APROVACAO_CLIENTE,
 				sellerUserId,
 			);
+			return sale;
 		});
+
+		// O cliente é avisado de que há uma proposta aguardando a resposta dele (RF-57)
+		void this.notifyStatusChange(adjustedSale);
 
 		return this.getSellerOrderDetail(sellerUserId, saleId);
 	}
@@ -1073,6 +1077,8 @@ export class SaleService {
 	/**
 	 * E-mail ao cliente com o novo status do pedido. Nunca lança erro: a mudança de
 	 * status já está gravada quando este método roda.
+	 * Só é chamado nas mudanças feitas pelo vendedor (status e proposta de ajuste); a
+	 * resposta do próprio cliente à proposta (`respondAdjustment`) não gera e-mail.
 	 */
 	private async notifyStatusChange(sale: Sale): Promise<void> {
 		try {

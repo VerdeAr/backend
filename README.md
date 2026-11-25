@@ -84,6 +84,9 @@ Documentação interativa:
 | `RESEND_API_KEY` | Chave do Resend para os e-mails transacionais (VER-83). Vazia: nenhum e-mail é enviado e a API segue normal | vazia |
 | `EMAIL_FROM` | Remetente dos e-mails; precisa ser de um domínio verificado no Resend | `VerdeAr <onboarding@resend.dev>` |
 | `APP_URL` | Opcional. Endereço do frontend usado nos botões dos e-mails (ex.: `https://app.seudominio.com`); sem ela, os e-mails saem sem botão | não definida |
+| `EMAIL_SEND_INTERVAL_MS` | Opcional. Intervalo mínimo entre e-mails, para respeitar o limite por segundo do Resend | `500` |
+| `REGISTER_RATE_LIMIT` | Opcional. Cadastros por hora por IP em `POST /auth/register` | `10` |
+| `TRUST_PROXY` | Opcional. Número de proxies reversos à frente da API (ex.: `1` no Coolify), para os limites por IP usarem o IP do visitante | não definida |
 
 > Nunca comite o `.env`. Troque `JWT_SECRET` em qualquer ambiente que não seja local.
 

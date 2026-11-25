@@ -99,7 +99,7 @@ Requisitos do produto, com o estado de cada um. O VerdeAr é um marketplace que 
 | RF-54 | O Vendedor tem página de detalhe do pedido (`/vendedor/pedidos/:id`) com linha do tempo, dados do cliente e rota de entrega. | B, F | Parcial (API `GET /vendedor/pedidos/:id` pronta; tela na VER-96) | VER-95, VER-96 |
 | RF-55 | O workflow do pedido ganha as etapas Recebido (`ABERTA`), Em Preparação, A Caminho (só Entrega) e Concluído (`FINALIZADA`). | B, F | Parcial (backend pronto; tela na VER-96) | VER-95, VER-96 |
 | RF-56 | O Vendedor propõe ajuste de quantidade ou pesagem, e o cliente aprova ou recusa por um banner no histórico; não há alteração unilateral. Aceitar atualiza quantidades, total, pagamento e estoque; recusar cancela o pedido. | B, F | Parcial (API de proposta e resposta pronta; telas na VER-96) | VER-95, VER-96 |
-| RF-57 | O Vendedor recebe e-mail de novo pedido e o cliente recebe e-mail a cada atualização de status. | B | Implementado (backend; avisos visuais na VER-84) | VER-82, VER-83 |
+| RF-57 | O Vendedor recebe e-mail de novo pedido e o cliente recebe e-mail a cada atualização de status feita pelo Vendedor, inclusive a proposta de ajuste. A resposta do próprio cliente à proposta não gera e-mail. | B | Implementado (backend; avisos visuais na VER-84) | VER-82, VER-83 |
 
 ### 2.7 Avaliações
 
