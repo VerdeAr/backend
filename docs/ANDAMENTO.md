@@ -74,6 +74,7 @@ Resultado: os ambientes de **homologação** e **produção** estão no ar, com 
 | VER-90 — Frete dinâmico com OpenRouteService e Leaflet | A fazer (a tarefa; as subtarefas já começaram) | VER-91 **Revisão** (branch `feat/VER-91-frete-por-km-openrouteservice`: frete por km com OpenRouteService, `POST /frete/calcular-rota`, frete gravado no pedido e testes com a API simulada) | VER-92 **Fazendo** | VER-93 A fazer |
 | VER-66 — PDP | A fazer (o Jira não atualizou a tarefa) | VER-67 Feito (no `main`) | VER-68 Feito | VER-69 A fazer |
 | VER-51 — Data loaders do React Router | Fazendo | VER-52 **Revisão** (suporte a aliases de query e sanitização de vazios) | VER-53 Feito | VER-54 A fazer |
+| VER-86 — Imagens na Cloudflare R2 | A fazer (a tarefa; o backend já começou) | VER-87 **Fazendo** (branch `feat/VER-87-upload-imagens-r2`: cliente S3 da R2, `POST /upload/presigned-url` com tipo e tamanho assinados, 503 sem configuração e testes sem rede) | VER-88 **Revisão** (PR #42, aguarda o contrato no `main`) | — |
 | VER-94 — Painel do vendedor e workflow de pedidos | A fazer (a tarefa; o backend já começou) | VER-95 **Fazendo** (branch `feat/VER-95-detalhe-pedido-ajuste-consentimento`: detalhe, máquina de estados, histórico, ajuste com consentimento e testes) | VER-96 A fazer | VER-97 A fazer |
 
 ---
@@ -85,7 +86,6 @@ Itens com trabalho de backend previsto, na ordem do Jira:
 | Tarefa | Backend previsto |
 |---|---|
 | VER-70 — Perfil público do produtor | VER-71: endpoint público `GET /vendedores/:id`. |
-| VER-86 — Imagens na Cloudflare R2 | VER-87: cliente S3 para R2 e geração de presigned URLs. |
 
 Itens sem trabalho de backend: VER-48 (subcomponentização do frontend) e VER-55 (`errorElement` e página 404).
 
@@ -96,6 +96,7 @@ Itens sem trabalho de backend: VER-48 (subcomponentização do frontend) e VER-5
 - **VER-108 (bug, Revisão, branch `fix/VER-108-dados-sensiveis-chat`, ainda sem merge):** os endpoints de chat expunham o hash da senha, o CPF, o e-mail e o telefone do outro participante. A correção seleciona só os campos públicos no chat e oculta a senha por padrão em todas as consultas. Depois do merge, retirar este item.
 - A entidade `CartItem` declara `UNIQUE (cart_id, product_id)`, mas a constraint não existe no banco; o `migration:generate` sempre a propõe. Corrigir em uma migration própria ainda não tem tarefa.
 - **VER-91 e VER-92 (frete por km):** pontos a confirmar com o TL. (1) O PR do frontend da VER-92 chama o OpenRouteService direto do navegador, o que expõe a chave da API, e calcula o frete por conta própria; o esperado é consumir `POST /frete/calcular-rota` e o `shipping_details` do carrinho. (2) O endpoint e as respostas de produto expõem a origem exata do produtor (o RF-17 fala em "localização geral"). (3) O limite de 30 req/min usa `req.ip`; atrás de proxy reverso, é preciso definir `TRUST_PROXY` (criada na VER-83) nos ambientes para não somar todos os visitantes no mesmo IP.
+- **VER-87 (upload R2), pontos a alinhar com o TL:** (1) restringir o `image_url` só a URLs do `R2_PUBLIC_URL` (hoje aceita qualquer URL); (2) arquivos órfãos no bucket (regra de ciclo de vida); (3) URL pública `r2.dev` em homologação ou domínio próprio em produção; (4) fotos de perfil ou de propriedade, já que esta entrega cobre só `products/`. As variáveis `R2_*` precisam ser cadastradas na homologação e na produção.
 - O `POST /vendas/checkout` devolve a entidade crua da venda (pagamento como objeto e itens sem `product_name`), diferente do `GET /vendas/:id`. O frontend contorna isso buscando o pedido pelo ID. Ajustar para devolver a venda formatada ainda não tem tarefa.
 
 ---
@@ -109,7 +110,7 @@ Quando as tarefas abaixo forem entregues, revise estas partes de `ARQUITETURA.md
 | VER-90 | O **frete** deixa de ser o valor fixo por produtor e passa a depender da distância. Atualizar as seções de carrinho e checkout, e o `fixed_shipping_rate`. |
 | VER-62 | O **endereço** do usuário passa a ser estruturado (CEP e campos separados). Atualizar o modelo de dados e o cadastro. |
 | VER-58 | O servidor Socket.io (VER-59) já está no `main`. A VER-108 já documentou os campos públicos do chat em §8. Depois da QA (VER-61), atualizar a visão de sistema, a autenticação e as limitações. |
-| VER-86 | `image_url` passa a apontar para o R2, com upload por URL pré-assinada. Atualizar catálogo, variáveis de ambiente e Docker. |
+| VER-86 | Backend documentado na VER-87 (`ARQUITETURA.md` §3, §8 Catálogo e §11; variáveis no `README.md` e no `CICD.md`). Revisar após o frontend (VER-88) e a decisão sobre restringir o `image_url` ao `R2_PUBLIC_URL`. |
 | VER-94 | Feito na VER-95 (máquina de estados, histórico e ajustes em `ARQUITETURA.md` §6 e §8). Revisar após a QA da VER-97. |
 | VER-74 | Concluída a QA (VER-77), remover as ressalvas sobre o cookie e o token no corpo da resposta de login. |
 

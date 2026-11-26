@@ -87,8 +87,15 @@ Documentação interativa:
 | `EMAIL_SEND_INTERVAL_MS` | Opcional. Intervalo mínimo entre e-mails, para respeitar o limite por segundo do Resend | `500` |
 | `REGISTER_RATE_LIMIT` | Opcional. Cadastros por hora por IP em `POST /auth/register` | `10` |
 | `TRUST_PROXY` | Opcional. Número de proxies reversos à frente da API (ex.: `1` no Coolify), para os limites por IP usarem o IP do visitante | não definida |
+| `R2_ACCOUNT_ID` | ID da conta Cloudflare da R2 (upload de imagens, VER-87) | vazio |
+| `R2_ACCESS_KEY_ID` | Access Key ID do token da R2 | vazio |
+| `R2_SECRET_ACCESS_KEY` | Secret Access Key do token da R2 (nunca versionar) | vazio |
+| `R2_BUCKET` | Nome do bucket de imagens | vazio |
+| `R2_PUBLIC_URL` | URL pública do bucket, sem barra no final | vazio |
+| `UPLOAD_RATE_LIMIT` | Opcional: pedidos de URL de upload por minuto por IP | `30` |
 
 > Nunca comite o `.env`. Troque `JWT_SECRET` em qualquer ambiente que não seja local.
+> Sem as variáveis `R2_*`, só o `POST /upload/presigned-url` fica indisponível (503); o resto da API funciona.
 
 ### Seed
 
