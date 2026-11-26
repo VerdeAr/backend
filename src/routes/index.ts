@@ -13,6 +13,7 @@ import { saleRoutes } from "./sale.routes";
 import { sellerOrderRoutes } from "./seller-order.routes";
 import { sellerProductRoutes } from "./seller-product.routes";
 import { shippingRoutes } from "./shipping.routes";
+import { uploadRoutes } from "./upload.routes";
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use("/vendas", saleRoutes);
 router.use("/avaliacoes", reviewRoutes);
 router.use("/chats", chatRoutes);
 router.use("/frete", shippingRoutes);
+router.use("/upload", uploadRoutes);
 
 export { router };
