@@ -136,6 +136,11 @@ export const swaggerDoc = {
 			description:
 				"Frete por quilômetro com a distância de condução do OpenRouteService (VER-91)",
 		},
+		{
+			name: "Upload de Imagens",
+			description:
+				"URL assinada para o navegador enviar a foto do produto direto à Cloudflare R2 (VER-87)",
+		},
 	],
 	components: {
 		securitySchemes: {
@@ -3945,6 +3950,139 @@ export const swaggerDoc = {
 						},
 					},
 					503: { $ref: "#/components/responses/ServiceUnavailable" },
+				},
+			},
+		},
+		"/upload/presigned-url": {
+			post: {
+				tags: ["Upload de Imagens"],
+				summary: "Gerar URL assinada para enviar a foto de um produto",
+				description:
+					"Exige papel VENDEDOR e é limitado a 30 requisições por minuto por IP (`UPLOAD_RATE_LIMIT`). " +
+					"A API não recebe o arquivo: devolve `uploadUrl`, uma URL de `PUT` válida por 5 minutos (300 s), e `fileUrl`, a URL pública final. " +
+					"O navegador faz `PUT` do binário direto em `uploadUrl`, sem cookie, com os cabeçalhos `Content-Type` e `Content-Length` iguais aos informados aqui. " +
+					"Tipo e tamanho fazem parte da assinatura, então a R2 recusa um envio diferente do declarado. " +
+					"Depois do envio, grave `fileUrl` no `image_url` do produto. " +
+					"A chave no bucket é `products/<user_id>/<uuid>.<ext>`, gerada no servidor; `filename` é só informativo e nunca entra no nome. " +
+					"A R2 não confere o conteúdo real dos bytes: o tipo validado é o declarado. " +
+					"A resposta usa `Cache-Control: no-store`, e `uploadUrl` é uma credencial temporária que não deve ir para log.",
+				security: authenticated,
+				requestBody: {
+					required: true,
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								properties: {
+									contentType: {
+										type: "string",
+										enum: ["image/jpeg", "image/png", "image/webp"],
+									},
+									size: {
+										type: "integer",
+										minimum: 1,
+										maximum: 5242880,
+										description: "Tamanho do arquivo em bytes (máximo 5 MB)",
+									},
+									filename: {
+										type: "string",
+										maxLength: 255,
+										description: "Nome original do arquivo, só informativo",
+									},
+								},
+								required: ["contentType", "size"],
+							},
+							example: {
+								contentType: "image/jpeg",
+								size: 482113,
+								filename: "alface-crespa.jpg",
+							},
+						},
+					},
+				},
+				responses: {
+					200: {
+						description: "URL assinada gerada",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										uploadUrl: {
+											type: "string",
+											format: "uri",
+											description: "URL de PUT assinada, válida por 300 s",
+										},
+										fileUrl: {
+											type: "string",
+											format: "uri",
+											description: "URL pública da imagem depois do envio",
+										},
+									},
+									required: ["uploadUrl", "fileUrl"],
+								},
+								example: {
+									uploadUrl:
+										"https://<account_id>.r2.cloudflarestorage.com/verdear-images/products/a1b2c3d4-e5f6-7890-abcd-ef1234567890/7f9c2b1e-3d4a-4c5b-8e6f-0a1b2c3d4e5f.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=300&X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost&X-Amz-Signature=...",
+									fileUrl:
+										"https://imagens.verdear.com.br/products/a1b2c3d4-e5f6-7890-abcd-ef1234567890/7f9c2b1e-3d4a-4c5b-8e6f-0a1b2c3d4e5f.jpg",
+								},
+							},
+						},
+					},
+					400: {
+						description:
+							"Tipo não permitido, tamanho inválido ou acima de 5 MB",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+								example: {
+									success: false,
+									message: "Falha de validação dos dados de entrada.",
+									errors: [
+										{
+											field: "contentType",
+											message:
+												"Tipo de imagem não permitido. Use JPEG, PNG ou WEBP.",
+										},
+										{
+											field: "size",
+											message: "A imagem deve ter no máximo 5 MB",
+										},
+									],
+								},
+							},
+						},
+					},
+					401: { $ref: "#/components/responses/Unauthorized" },
+					403: { $ref: "#/components/responses/Forbidden" },
+					429: {
+						description: "Limite de pedidos de upload por minuto excedido",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+								example: {
+									success: false,
+									message:
+										"Muitos pedidos de envio de imagem em pouco tempo. Aguarde um minuto e tente novamente.",
+								},
+							},
+						},
+					},
+					503: {
+						description:
+							"Armazenamento de imagens (Cloudflare R2) não configurado ou indisponível. A mensagem não expõe detalhes internos.",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+								example: {
+									success: false,
+									message:
+										"O envio de imagens está indisponível no momento. Tente novamente mais tarde ou informe a URL da imagem.",
+								},
+							},
+						},
+					},
 				},
 			},
 		},

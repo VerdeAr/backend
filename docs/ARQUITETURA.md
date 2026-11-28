@@ -55,6 +55,9 @@ flowchart LR
     A -- "TypeORM" --> D[(PostgreSQL)]
     A -. "/docs" .-> S[Swagger UI]
     A -. "e-mails transacionais" .-> R[Resend]
+    A -. "assina URL de PUT<br/>(sem rede)" .-> B[(Cloudflare R2)]
+    U -- "PUT da foto<br/>(URL assinada)" --> B
+    U -- "GET da imagem" --> B
 ```
 
 O backend é um serviço único e sem estado de sessão no servidor. A identidade vem do JWT enviado em cada requisição.
@@ -200,6 +203,13 @@ Pontos importantes do modelo:
 - O detalhe de produto retorna 404 se estiver inativo ou sem estoque e inclui estatísticas de avaliação.
 - O vendedor só edita, ativa ou desativa produtos do próprio perfil (403 caso contrário).
 - **Exclusão:** o produto é removido do banco; se houver vendas vinculadas (`RESTRICT`), ele é apenas desativado e a API informa isso na resposta.
+- **Upload da foto (VER-87, RF-25 e RNF-05):** a API não recebe o arquivo. O fluxo é:
+  1. O front chama `POST /upload/presigned-url` (só VENDEDOR, 30 req/min por IP, `Cache-Control: no-store`) com `contentType` (`image/jpeg`, `image/png` ou `image/webp`), `size` (até 5 MB) e `filename` opcional, só informativo.
+  2. `src/services/storage.service.ts` monta o cliente S3 da R2 (`region: "auto"`, endpoint `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com`, checksum só `WHEN_REQUIRED`) e assina localmente um `PutObjectCommand` válido por 300 s, com `Content-Type` e `Content-Length` em `signableHeaders`. Assim a R2 recusa um envio com outro tipo ou tamanho.
+  3. A chave é `products/<user_id>/<uuid>.<ext>`, gerada no servidor; o nome enviado nunca é usado. A resposta é `{ uploadUrl, fileUrl }`, com `fileUrl = R2_PUBLIC_URL + "/" + chave`.
+  4. O navegador faz `PUT` direto na `uploadUrl` e grava a `fileUrl` em `image_url` pelos endpoints de produto que já existem.
+  - Sem as variáveis `R2_*`, ou se a assinatura falhar, a rota responde 503 amigável; a API sobe e as demais rotas seguem normais. Nem as credenciais nem a `uploadUrl` (credencial temporária) vão para log ou resposta de erro.
+  - O bucket precisa de CORS liberando `PUT` com o cabeçalho `Content-Type` para as origens do frontend, além de leitura pública. Isso é configurado no painel da Cloudflare.
 
 ### Carrinho e frete
 - Um carrinho por usuário, criado sob demanda. O preço do item é atualizado ao adicionar ou alterar quantidade.
@@ -334,6 +344,7 @@ O `HEALTHCHECK` do `Dockerfile` consulta `/ready`, e o `monitoring.yml` faz o me
 
 - **Sem refresh token** e sem revogação de token no logout.
 - **Frete por bairro** está modelado, mas sem API.
+- **Upload de imagens (VER-87):** a R2 não confere o conteúdo real dos bytes, só o tipo declarado e assinado. O `image_url` do produto ainda aceita qualquer URL, e arquivos órfãos (envio sem salvar o produto, ou foto trocada) ficam no bucket; uma regra de ciclo de vida fica para depois. O limite por minuto usa `req.ip`, então atrás do Coolify depende de `TRUST_PROXY` definida no ambiente (VER-83).
 - **`cart_items`:** a entidade `CartItem` declara `UNIQUE (cart_id, product_id)`, mas a constraint não existe no banco (a `InitialSchema` não a cria). O `migration:generate` sempre a propõe; ela não entrou na migration da VER-95 por estar fora do escopo.
 - **`DB_*` e `JWT_SECRET`** usam `process.env` sem validação de presença na inicialização; valores ausentes só falham em tempo de execução. Em `server.ts`, uma falha ao conectar no banco apenas registra o erro, sem encerrar o processo.
 
